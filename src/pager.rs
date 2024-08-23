@@ -1,6 +1,51 @@
+use std::{collections::HashMap, io::{Read, Seek}};
+
+use anyhow::Context;
+
 use crate::page;
 
 pub const HEADER_SIZE: usize = 100;
+
+#[derive(Debug, Clone)]
+pub struct Pager<I: Read + Seek = std::fs::File> {
+    input: I,
+    page_size: usize,
+    pages: HashMap<usize, page::Page>,
+}
+
+impl<I: Read + Seek> Pager<I> {
+    pub fn new(input: I, page_size: usize) -> Self {
+        Self {
+            input,
+            page_size,
+            pages: HashMap::new(),
+        }
+    }
+
+    pub fn read_page(&mut self, n: usize) -> anyhow::Result<&page::Page> {
+        if self.pages.contains_key(&n) {
+            Ok(self.pages.get(&n).unwrap())
+        } else {
+            let page = self.load_page(n)?;
+            self.pages.insert(n, page);
+            Ok(self.pages.get(&n).unwrap())
+        }
+    }
+
+    fn load_page(&mut self, n: usize) -> anyhow::Result<page::Page> {
+        let offset = HEADER_SIZE + n.saturating_sub(1) * self.page_size;
+
+        self.input
+            .seek(std::io::SeekFrom::Start(offset as u64))
+            .context("seek to page start")?;
+
+        let mut buffer = vec![0; self.page_size];
+        self.input.read_exact(&mut buffer).context("read page")?;
+
+        parse_page(&buffer, n)
+    }
+}
+
 const HEADER_PREFIX: &[u8] = b"SQLite format 3\0";
 const HEADER_PAGE_SIZE_OFFSET: usize = 16;
 const PAGE_MAX_SIZE: u32 = 65536;
