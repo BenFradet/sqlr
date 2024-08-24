@@ -146,7 +146,7 @@ fn parse_table_leaf_cell(mut buffer: &[u8]) -> anyhow::Result<page::TableLeafCel
     )
 }
 
-fn read_varint_at(buffer: &[u8], mut offset: usize) -> (u8, i64) {
+pub fn read_varint_at(buffer: &[u8], mut offset: usize) -> (u8, i64) {
     let mut size = 0;
     let mut result = 0;
 
