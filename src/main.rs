@@ -1,4 +1,5 @@
 mod cursor;
+mod db;
 mod page;
 mod pager;
 mod scanner;
