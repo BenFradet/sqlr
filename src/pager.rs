@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::{Read, Seek}};
 
 use anyhow::Context;
 
-use crate::page;
+use crate::page::{self, PageType};
 
 pub const HEADER_SIZE: usize = 100;
 
@@ -67,8 +67,10 @@ pub fn parse_header(buffer: &[u8]) -> anyhow::Result<page::DbHeader> {
 fn parse_page(buffer: &[u8], page_num: usize) -> anyhow::Result<page::Page> {
     let ptr_offset = if page_num == 1 { HEADER_SIZE as u16 } else { 0 };
 
-    let page_type = parse_page_type(buffer)?;
-    parse_table_leaf_page(buffer, ptr_offset)
+    match parse_page_type(buffer) {
+        Ok(PageType::TableLeaf) => parse_table_leaf_page(buffer, ptr_offset),
+        _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
+    }
 }
 
 const PAGE_LEAF_HEADER_SIZE: usize = 8;
@@ -162,7 +164,7 @@ pub fn read_varint_at(buffer: &[u8], mut offset: usize) -> (u8, i64) {
     (size + 1, result)
 }
 
-const PAGE_LEAF_TABLE_ID: u8 = 0x0D;
+const PAGE_LEAF_TABLE_ID: u8 = 13;
 fn parse_page_type(buffer: &[u8]) -> anyhow::Result<page::PageType> {
     match buffer[0] {
         PAGE_LEAF_TABLE_ID => Ok(page::PageType::TableLeaf),

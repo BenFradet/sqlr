@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use crate::{page::Page, pager::{self, Pager}, value::Value};
 
+#[derive(Debug)]
 pub struct Cursor<'p> {
     header: RecordHeader,
     pager: &'p mut Pager,
@@ -134,11 +135,11 @@ pub fn parse_record_header(mut buffer: &[u8]) -> anyhow::Result<RecordHeader> {
             9 => (RecordFieldType::One, 0),
             n if n >= 12 && n % 2 == 0 => {
                 let size = ((n - 12) / 2) as usize;
-                (RecordFieldType::String(size), size)
-            },
-            n if n >= 13 && n %2 == 1 => {
-                let size = ((n - 13) / 2) as usize;
                 (RecordFieldType::Blob(size), size)
+            },
+            n if n >= 13 && n % 2 == 1 => {
+                let size = ((n - 13) / 2) as usize;
+                (RecordFieldType::String(size), size)
             },
             n => anyhow::bail!("unsupported field type: {}", n),
         };

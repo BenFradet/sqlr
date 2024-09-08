@@ -4,6 +4,7 @@ use anyhow::Context;
 
 use crate::{page::DbHeader, pager::{self, Pager}, scanner::Scanner};
 
+#[derive(Debug)]
 pub struct Db {
     pub header: DbHeader,
     pager: Pager,
