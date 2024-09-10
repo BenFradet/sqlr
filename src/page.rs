@@ -24,7 +24,7 @@ pub struct PageHeader {
     pub fragmented_bytes_count: u8,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PageType {
     TableLeaf,
 }
