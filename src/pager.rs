@@ -2,9 +2,11 @@ use std::{collections::HashMap, io::{Read, Seek}};
 
 use anyhow::Context;
 
-use crate::page::{self, PageType};
+use crate::page::{self, PageType, TableLeafCell};
 
 pub const HEADER_SIZE: usize = 100;
+
+// https://www.sqlite.org/fileformat.html
 
 #[derive(Debug, Clone)]
 pub struct Pager<I: Read + Seek = std::fs::File> {
@@ -96,11 +98,21 @@ fn parse_table_leaf_page(buffer: &[u8], ptr_offset: u16) -> anyhow::Result<page:
     )
 }
 
+// 0th byte => 13 for a table btree leaf
+// word at 1 byte offset => first free block offset in the page, 0 if no free block
+// word at 3 byte offset => cell count in the page
+// word at 5 byte offset => offset of the first cell
+// 7th byte => number of fragmented free bytes in the page (probably used for vaccuuming?)
+// 2 words at 8 byte offset => right most pointer in interior b-tree pages
 const PAGE_FIRST_FREEBLOCK_OFFSET: usize = 1;
 const PAGE_CELL_COUNT_OFFSET: usize = 3;
 const PAGE_CELL_CONTENT_OFFSET: usize = 5;
 const PAGE_FRAGMENTED_BYTES_COUNT_OFFSET: usize = 7;
 fn parse_page_header(buffer: &[u8]) -> anyhow::Result<page::PageHeader> {
+    if buffer.len() < 7 {
+        return Err(anyhow::anyhow!("page header must be at least 7-byte long"))
+    }
+
     let page_type = parse_page_type(buffer)?;
 
     let first_freeblock = read_be_word_at(buffer, PAGE_FIRST_FREEBLOCK_OFFSET);
@@ -122,14 +134,24 @@ fn parse_page_header(buffer: &[u8]) -> anyhow::Result<page::PageHeader> {
     )
 }
 
+// turns [u8] into [u16]
 fn parse_cell_pointers(buffer: &[u8], n: usize, ptr_offset: u16) -> Vec<u16> {
     let mut pointers = Vec::with_capacity(n);
     for i in 0..n {
-        pointers.push(read_be_word_at(buffer, 2 * i) - ptr_offset);
+        let offset = 2 * i;
+        if offset + 2 <= buffer.len() {
+            pointers.push(read_be_word_at(buffer, offset) - ptr_offset);
+        } else {
+            break;
+        }
     }
     pointers
 }
 
+// format is:
+// - size of the payload: varint
+// - row id: varint
+// - payload
 fn parse_table_leaf_cell(mut buffer: &[u8]) -> anyhow::Result<page::TableLeafCell> {
     let (n, size) = read_varint_at(buffer, 0);
     buffer = &buffer[n as usize..];
@@ -137,10 +159,15 @@ fn parse_table_leaf_cell(mut buffer: &[u8]) -> anyhow::Result<page::TableLeafCel
     let (n, row_id) = read_varint_at(buffer, 0);
     buffer = &buffer[n as usize..];
 
-    let payload = buffer[..size as usize].to_vec();
+    let su = size as usize;
+    let payload = if su <= buffer.len() {
+        buffer[..su].to_vec()
+    } else {
+        buffer.to_vec()
+    };
 
     Ok(
-        page::TableLeafCell {
+        TableLeafCell {
             size,
             row_id,
             payload,
@@ -220,6 +247,10 @@ fn read_varint_rec(buffer: &[u8], offset: usize) -> (u8, i64) {
     go(buffer, offset, 0, 0)
 }
 
+// 2: interior index b-tree page
+// 5: interior table b-tree page
+// 10: leaf index b-tree page
+// 13: leaf table b-tree page
 const PAGE_LEAF_TABLE_ID: u8 = 13;
 fn parse_page_type(buffer: &[u8]) -> anyhow::Result<page::PageType> {
     match buffer[0] {
@@ -235,6 +266,42 @@ fn read_be_word_at(input: &[u8], offset: usize) -> u16 {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn parse_page_header_tests() -> () {
+        // first byte must be 13 for a table b-tree leaf
+        assert!(parse_page_header(&[12]).is_err());
+        assert!(parse_page_header(&[12, 0, 12, 0, 11, 0, 10, 0]).is_err());
+        let res = parse_page_header(&[13, 0, 12, 0, 11, 0, 0, 0]);
+        assert!(res.is_ok());
+        let expected = page::PageHeader {
+            page_type: PageType::TableLeaf,
+            first_freeblock: 12,
+            cell_count: 11,
+            cell_content_offset: 65536,
+            fragmented_bytes_count: 0,
+        };
+        assert_eq!(expected, res.unwrap());
+    }
+
+    #[test]
+    fn parse_cell_pointers_test() -> () {
+        assert_eq!(vec![65535], parse_cell_pointers(&[255, 255], 1, 0));
+        assert_eq!(vec![65535], parse_cell_pointers(&[255, 255], 2, 0));
+        assert_eq!(vec![65435], parse_cell_pointers(&[255, 255], 1, HEADER_SIZE as u16));
+    }
+
+    #[test]
+    fn parse_table_leaf_cell_tests() -> () {
+        let size = 10;
+        let row_id = 2;
+        let payload = 127;
+        let input = [size, row_id, payload];
+        let res = parse_table_leaf_cell(&input);
+        let expected = TableLeafCell { size: size as i64, row_id: row_id as i64, payload: vec![payload] };
+        assert!(res.is_ok());
+        assert_eq!(expected, res.unwrap());
+    }
 
     #[test]
     fn read_single_byte_varint() {

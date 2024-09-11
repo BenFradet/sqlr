@@ -15,7 +15,7 @@ pub struct TableLeafPage {
     pub cells: Vec<TableLeafCell>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PageHeader {
     pub page_type: PageType,
     pub first_freeblock: u16,
@@ -29,7 +29,7 @@ pub enum PageType {
     TableLeaf,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TableLeafCell {
     pub size: i64,
     pub row_id: i64,
