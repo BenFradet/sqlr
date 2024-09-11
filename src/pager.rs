@@ -178,15 +178,17 @@ pub fn read_varint_at(buffer: &[u8], offset: usize) -> (u8, i64) {
     let mut res: i64 = 0;
     let mut bytes: u8 = 0;
 
-    for (i, byte) in buffer[offset..].iter().enumerate().take(9) {
-        bytes += 1;
-        if i == 8 {
-            res = (res << 8) | *byte as i64;
-            break;
-        } else {
-            res = (res << 7) | (*byte & 0b0111_1111) as i64;
-            if *byte < 0b1000_0000 {
+    if offset < buffer.len() {
+        for (i, byte) in buffer[offset..].iter().enumerate().take(9) {
+            bytes += 1;
+            if i == 8 {
+                res = (res << 8) | *byte as i64;
                 break;
+            } else {
+                res = (res << 7) | (*byte & 0b0111_1111) as i64;
+                if *byte < 0b1000_0000 {
+                    break;
+                }
             }
         }
     }
@@ -270,23 +272,27 @@ mod test {
         assert_eq!((9, -1), read_varint_at(&vec![0xff; 10], 0));
         assert_eq!((1, 1), read_varint_rec(&vec![0x01; 10], 0));
         assert_eq!((9, -1), read_varint_rec(&vec![0xff; 10], 0));
+        println!("{:?}", &vec![0xff; 10]);
     }
 
     #[test]
     fn read_varint_at_short() -> () {
-        let input = [255];
-        let (size, n) = read_varint_at(&input, 0);
-        assert_eq!(size, 1);
-        assert_eq!(n, 127);
+        assert_eq!((1, 127), read_varint_at(&[255], 0));
+        assert_eq!((1, 127), read_varint_rec(&[255], 0));
     }
 
     #[test]
-    fn read_varint_at_overflow() -> () {
-        // 10 x 255
-        let input = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255];
-        let (size, n) = read_varint_at(&input, 0);
-        assert_eq!(size, 9);
-        assert_eq!(n, -1);
+    fn read_varint_at_empty() -> () {
+        assert_eq!((0, 0), read_varint_at(&[], 0));
+        assert_eq!((0, 0), read_varint_rec(&[], 0));
+    }
+
+    #[test]
+    fn read_varint_at_offset() -> () {
+        assert_eq!((0, 0), read_varint_at(&[], 1));
+        assert_eq!((0, 0), read_varint_rec(&[], 1));
+        assert_eq!((1, 127), read_varint_at(&vec![0b10000001, 0b01111111], 1));
+        assert_eq!((1, 127), read_varint_rec(&vec![0b10000001, 0b01111111], 1));
     }
 
     #[test]
