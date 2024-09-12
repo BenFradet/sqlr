@@ -53,7 +53,8 @@ const HEADER_PAGE_SIZE_OFFSET: usize = 16;
 const PAGE_MAX_SIZE: u32 = 65536;
 pub fn parse_header(buffer: &[u8]) -> anyhow::Result<DbHeader> {
     if !buffer.starts_with(HEADER_PREFIX) {
-        let prefix = String::from_utf8_lossy(&buffer[..HEADER_PREFIX.len()]);
+        let len = buffer.len().min(HEADER_PREFIX.len());
+        let prefix = String::from_utf8_lossy(&buffer[..len]);
         Err(anyhow::anyhow!("invalid header prefix: {prefix}"))
     } else {
         let page_size_raw = read_be_word_at(buffer, HEADER_PAGE_SIZE_OFFSET);
@@ -273,6 +274,47 @@ fn read_be_word_at(input: &[u8], offset: usize) -> u16 {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn parse_header_tests() -> () {
+        assert!(parse_header(&[1, 2, 3]).is_err());
+        assert!(parse_header(&[HEADER_PREFIX, &[3]].concat()).is_err());
+        let res_max = parse_header(&[HEADER_PREFIX, &[1]].concat());
+        assert!(res_max.is_ok());
+        assert_eq!(DbHeader { page_size: 65536 }, res_max.unwrap());
+        let res_pow = parse_header(&[HEADER_PREFIX, &[8]].concat());
+        assert!(res_pow.is_ok());
+        assert_eq!(DbHeader { page_size: 8 }, res_pow.unwrap());
+    }
+
+    #[test]
+    fn parse_page_tests() -> () {
+        assert!(parse_page(&[12], 0).is_err());
+        let buffer = [
+            // page header w/ 1 as cell count
+            13, 0, 12, 0, 1, 0, 0, 0,
+            // cell pointer
+            0, 10,
+            // leaf cell (size, row id, payload)
+            10, 2, 127
+        ];
+        let res = parse_page(&buffer, 0);
+        assert!(res.is_ok());
+        let expected = Page::TableLeaf(
+            TableLeafPage {
+                header: PageHeader {
+                    page_type: PageType::TableLeaf,
+                    first_freeblock: 12,
+                    cell_count: 1,
+                    cell_content_offset: 65536,
+                    fragmented_bytes_count: 0,
+                },
+                cell_pointers: vec![10],
+                cells: vec!{TableLeafCell { size: 10, row_id: 2, payload: vec![127]}},
+            }
+        );
+        assert_eq!(expected, res.unwrap());
+    }
 
     #[test]
     fn parse_table_leaf_page_tests() -> () {
