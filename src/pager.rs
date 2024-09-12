@@ -260,7 +260,14 @@ fn parse_page_type(buffer: &[u8]) -> anyhow::Result<page::PageType> {
 }
 
 fn read_be_word_at(input: &[u8], offset: usize) -> u16 {
-    u16::from_be_bytes(input[offset..offset + 2].try_into().unwrap())
+    let len = input.len();
+    if len >= offset + 2 {
+        u16::from_be_bytes(input[offset..offset + 2].try_into().unwrap())
+    } else if len > offset {
+        input[offset] as u16
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]
@@ -387,8 +394,8 @@ mod test {
 
     #[test]
     fn read_be_word_at_offset() -> () {
-        let input = [255, 12, 14];
-        let res = read_be_word_at(&input, 1);
-        assert_eq!(res, 3086);
+        assert_eq!(3086, read_be_word_at(&[255, 12, 14], 1));
+        assert_eq!(255, read_be_word_at(&[255], 0));
+        assert_eq!(0, read_be_word_at(&[255], 1));
     }
 }
