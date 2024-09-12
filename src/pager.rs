@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::{Read, Seek}};
 
 use anyhow::Context;
 
-use crate::page::{self, PageType, TableLeafCell};
+use crate::page::*;
 
 pub const HEADER_SIZE: usize = 100;
 
@@ -12,7 +12,7 @@ pub const HEADER_SIZE: usize = 100;
 pub struct Pager<I: Read + Seek = std::fs::File> {
     input: I,
     page_size: usize,
-    pages: HashMap<usize, page::Page>,
+    pages: HashMap<usize, Page>,
 }
 
 impl<I: Read + Seek> Pager<I> {
@@ -24,7 +24,7 @@ impl<I: Read + Seek> Pager<I> {
         }
     }
 
-    pub fn read_page(&mut self, n: usize) -> anyhow::Result<&page::Page> {
+    pub fn read_page(&mut self, n: usize) -> anyhow::Result<&Page> {
         if self.pages.contains_key(&n) {
             Ok(self.pages.get(&n).unwrap())
         } else {
@@ -34,7 +34,7 @@ impl<I: Read + Seek> Pager<I> {
         }
     }
 
-    fn load_page(&mut self, n: usize) -> anyhow::Result<page::Page> {
+    fn load_page(&mut self, n: usize) -> anyhow::Result<Page> {
         let offset = HEADER_SIZE + n.saturating_sub(1) * self.page_size;
 
         self.input
@@ -51,7 +51,7 @@ impl<I: Read + Seek> Pager<I> {
 const HEADER_PREFIX: &[u8] = b"SQLite format 3\0";
 const HEADER_PAGE_SIZE_OFFSET: usize = 16;
 const PAGE_MAX_SIZE: u32 = 65536;
-pub fn parse_header(buffer: &[u8]) -> anyhow::Result<page::DbHeader> {
+pub fn parse_header(buffer: &[u8]) -> anyhow::Result<DbHeader> {
     if !buffer.starts_with(HEADER_PREFIX) {
         let prefix = String::from_utf8_lossy(&buffer[..HEADER_PREFIX.len()]);
         Err(anyhow::anyhow!("invalid header prefix: {prefix}"))
@@ -62,11 +62,11 @@ pub fn parse_header(buffer: &[u8]) -> anyhow::Result<page::DbHeader> {
             n if n.is_power_of_two() => Ok(n as u32),
             _ => Err(anyhow::anyhow!("page size is not a power of 2: {}", page_size_raw)),
         };
-        page_size.map(|page_size| page::DbHeader { page_size })
+        page_size.map(|page_size| DbHeader { page_size })
     }
 }
 
-fn parse_page(buffer: &[u8], page_num: usize) -> anyhow::Result<page::Page> {
+fn parse_page(buffer: &[u8], page_num: usize) -> anyhow::Result<Page> {
     let ptr_offset = if page_num == 1 { HEADER_SIZE as u16 } else { 0 };
 
     match parse_page_type(buffer) {
@@ -76,7 +76,7 @@ fn parse_page(buffer: &[u8], page_num: usize) -> anyhow::Result<page::Page> {
 }
 
 const PAGE_LEAF_HEADER_SIZE: usize = 8;
-fn parse_table_leaf_page(buffer: &[u8], ptr_offset: u16) -> anyhow::Result<page::Page> {
+fn parse_table_leaf_page(buffer: &[u8], ptr_offset: u16) -> anyhow::Result<Page> {
     let header = parse_page_header(buffer)?;
 
     let content_buffer = &buffer[PAGE_LEAF_HEADER_SIZE..];
@@ -85,11 +85,11 @@ fn parse_table_leaf_page(buffer: &[u8], ptr_offset: u16) -> anyhow::Result<page:
     let cells = cell_pointers
         .iter()
         .map(|&ptr| parse_table_leaf_cell(&buffer[ptr as usize..]))
-        .collect::<anyhow::Result<Vec<page::TableLeafCell>>>()?;
+        .collect::<anyhow::Result<Vec<TableLeafCell>>>()?;
 
     Ok(
-        page::Page::TableLeaf(
-            page::TableLeafPage {
+        Page::TableLeaf(
+            TableLeafPage {
                 header,
                 cell_pointers,
                 cells,
@@ -108,7 +108,7 @@ const PAGE_FIRST_FREEBLOCK_OFFSET: usize = 1;
 const PAGE_CELL_COUNT_OFFSET: usize = 3;
 const PAGE_CELL_CONTENT_OFFSET: usize = 5;
 const PAGE_FRAGMENTED_BYTES_COUNT_OFFSET: usize = 7;
-fn parse_page_header(buffer: &[u8]) -> anyhow::Result<page::PageHeader> {
+fn parse_page_header(buffer: &[u8]) -> anyhow::Result<PageHeader> {
     if buffer.len() < 7 {
         return Err(anyhow::anyhow!("page header must be at least 7-byte long"))
     }
@@ -124,7 +124,7 @@ fn parse_page_header(buffer: &[u8]) -> anyhow::Result<page::PageHeader> {
     let fragmented_bytes_count = buffer[PAGE_FRAGMENTED_BYTES_COUNT_OFFSET];
 
     Ok(
-        page::PageHeader {
+        PageHeader {
             page_type,
             first_freeblock,
             cell_count,
@@ -152,7 +152,7 @@ fn parse_cell_pointers(buffer: &[u8], n: usize, ptr_offset: u16) -> Vec<u16> {
 // - size of the payload: varint
 // - row id: varint
 // - payload
-fn parse_table_leaf_cell(mut buffer: &[u8]) -> anyhow::Result<page::TableLeafCell> {
+fn parse_table_leaf_cell(mut buffer: &[u8]) -> anyhow::Result<TableLeafCell> {
     let (n, size) = read_varint_at(buffer, 0);
     buffer = &buffer[n as usize..];
 
@@ -252,7 +252,7 @@ fn read_varint_rec(buffer: &[u8], offset: usize) -> (u8, i64) {
 // 10: leaf index b-tree page
 // 13: leaf table b-tree page
 const PAGE_LEAF_TABLE_ID: u8 = 13;
-fn parse_page_type(buffer: &[u8]) -> anyhow::Result<page::PageType> {
+fn parse_page_type(buffer: &[u8]) -> anyhow::Result<PageType> {
     match buffer[0] {
         PAGE_LEAF_TABLE_ID => Ok(PageType::TableLeaf),
         _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
@@ -275,13 +275,42 @@ mod test {
     use super::*;
 
     #[test]
+    fn parse_table_leaf_page_tests() -> () {
+        assert!(parse_table_leaf_page(&[12], 0).is_err());
+        let buffer = [
+            // page header w/ 1 as cell count
+            13, 0, 12, 0, 1, 0, 0, 0,
+            // cell pointer
+            0, 10,
+            // leaf cell (size, row id, payload)
+            10, 2, 127
+        ];
+        let res = parse_table_leaf_page(&buffer, 0);
+        assert!(res.is_ok());
+        let expected = Page::TableLeaf(
+            TableLeafPage {
+                header: PageHeader {
+                    page_type: PageType::TableLeaf,
+                    first_freeblock: 12,
+                    cell_count: 1,
+                    cell_content_offset: 65536,
+                    fragmented_bytes_count: 0,
+                },
+                cell_pointers: vec![10],
+                cells: vec!{TableLeafCell { size: 10, row_id: 2, payload: vec![127]}},
+            }
+        );
+        assert_eq!(expected, res.unwrap());
+    }
+
+    #[test]
     fn parse_page_header_tests() -> () {
         // first byte must be 13 for a table b-tree leaf
         assert!(parse_page_header(&[12]).is_err());
         assert!(parse_page_header(&[12, 0, 12, 0, 11, 0, 10, 0]).is_err());
         let res = parse_page_header(&[13, 0, 12, 0, 11, 0, 0, 0]);
         assert!(res.is_ok());
-        let expected = page::PageHeader {
+        let expected = PageHeader {
             page_type: PageType::TableLeaf,
             first_freeblock: 12,
             cell_count: 11,

@@ -3,12 +3,12 @@ pub struct DbHeader {
     pub page_size: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Page {
     TableLeaf(TableLeafPage),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TableLeafPage {
     pub header: PageHeader,
     pub cell_pointers: Vec<u16>,
