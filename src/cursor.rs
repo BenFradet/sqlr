@@ -100,6 +100,49 @@ pub enum RecordFieldType {
     Blob(usize),
 }
 
+impl RecordFieldType {
+    fn parse(discriminant: i64) -> anyhow::Result<RecordFieldType> {
+        match discriminant {
+            0 => Ok(RecordFieldType::Null),
+            1 => Ok(RecordFieldType::I8),
+            2 => Ok(RecordFieldType::I16),
+            3 => Ok(RecordFieldType::I24),
+            4 => Ok(RecordFieldType::I32),
+            5 => Ok(RecordFieldType::I48),
+            6 => Ok(RecordFieldType::I64),
+            7 => Ok(RecordFieldType::Float),
+            8 => Ok(RecordFieldType::Zero),
+            9 => Ok(RecordFieldType::One),
+            n if n >= 12 && n % 2 == 0 => {
+                let size = ((n - 12) / 2) as usize;
+                Ok(RecordFieldType::Blob(size))
+            },
+            n if n >= 13 && n % 2 == 1 => {
+                let size = ((n - 13) / 2) as usize;
+                Ok(RecordFieldType::String(size))
+            },
+            n => Err(anyhow::anyhow!("unsupported field type: {}", n)),
+        }
+    }
+
+    fn size(self) -> usize {
+        match self {
+            Self::Null => 0,
+            Self::I8 => 1,
+            Self::I16 => 2,
+            Self::I24 => 3,
+            Self::I32 => 4,
+            Self::I48 => 6,
+            Self::I64 => 8,
+            Self::Float => 8,
+            Self::Zero => 0,
+            Self::One => 0,
+            Self::Blob(s) => s,
+            Self::String(s) => s,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RecordField {
     pub offset: usize,
@@ -122,27 +165,8 @@ pub fn parse_record_header(mut buffer: &[u8]) -> anyhow::Result<RecordHeader> {
         let (discriminant_size, discriminant) = pager::read_varint_at(buffer, 0);
         buffer = &buffer[discriminant_size as usize..];
 
-        let (field_type, field_size) = match discriminant {
-            0 => (RecordFieldType::Null, 0),
-            1 => (RecordFieldType::I8, 1),
-            2 => (RecordFieldType::I16, 2),
-            3 => (RecordFieldType::I24, 3),
-            4 => (RecordFieldType::I32, 4),
-            5 => (RecordFieldType::I48, 6),
-            6 => (RecordFieldType::I64, 8),
-            7 => (RecordFieldType::Float, 8),
-            8 => (RecordFieldType::Zero, 0),
-            9 => (RecordFieldType::One, 0),
-            n if n >= 12 && n % 2 == 0 => {
-                let size = ((n - 12) / 2) as usize;
-                (RecordFieldType::Blob(size), size)
-            },
-            n if n >= 13 && n % 2 == 1 => {
-                let size = ((n - 13) / 2) as usize;
-                (RecordFieldType::String(size), size)
-            },
-            n => anyhow::bail!("unsupported field type: {}", n),
-        };
+        let field_type = RecordFieldType::parse(discriminant)?;
+        let field_size = field_type.size();
 
         fields.push(RecordField {
             offset: current_offset,
