@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     io::{Read, Seek},
 };
 
@@ -24,13 +24,11 @@ impl<I: Read + Seek> Pager<I> {
     }
 
     pub fn read_page(&mut self, n: usize) -> anyhow::Result<&Page> {
-        if self.pages.contains_key(&n) {
-            Ok(self.pages.get(&n).unwrap())
-        } else {
+        if let Entry::Vacant(_) = self.pages.entry(n) {
             let page = self.load_page(n)?;
             self.pages.insert(n, page);
-            Ok(self.pages.get(&n).unwrap())
         }
+        Ok(self.pages.get(&n).unwrap())
     }
 
     fn load_page(&mut self, n: usize) -> anyhow::Result<Page> {

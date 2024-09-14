@@ -45,7 +45,7 @@ impl Page {
 
         match PageType::parse(buffer) {
             Ok(PageType::TableLeaf) => {
-                TableLeafPage::parse(buffer, ptr_offset).map(|tlp| Page::TableLeaf(tlp))
+                TableLeafPage::parse(buffer, ptr_offset).map(Page::TableLeaf)
             }
             _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
         }

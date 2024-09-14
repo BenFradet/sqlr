@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     page::Page,
-    pager::{self, Pager},
+    pager::Pager,
     utils,
     value::Value,
 };
