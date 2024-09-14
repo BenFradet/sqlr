@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{page::Page, pager::{self, Pager}, value::Value};
+use crate::{page::Page, pager::{self, Pager}, utils, value::Value};
 
 #[derive(Debug)]
 pub struct Cursor<'p> {
@@ -154,27 +154,29 @@ pub struct RecordHeader {
     pub fields: Vec<RecordField>,
 }
 
-pub fn parse_record_header(mut buffer: &[u8]) -> anyhow::Result<RecordHeader> {
-    let (varint_size, header_length) = pager::read_varint_at(buffer, 0);
-    buffer = &buffer[varint_size as usize..header_length as usize];
+impl RecordHeader {
+    pub fn parse(mut buffer: &[u8]) -> anyhow::Result<RecordHeader> {
+        let (varint_size, header_length) = utils::read_varint_at(buffer, 0);
+        buffer = &buffer[varint_size as usize..header_length as usize];
 
-    let mut fields = Vec::new();
-    let mut current_offset = header_length as usize;
+        let mut fields = Vec::new();
+        let mut current_offset = header_length as usize;
 
-    while !buffer.is_empty() {
-        let (discriminant_size, discriminant) = pager::read_varint_at(buffer, 0);
-        buffer = &buffer[discriminant_size as usize..];
+        while !buffer.is_empty() {
+            let (discriminant_size, discriminant) = utils::read_varint_at(buffer, 0);
+            buffer = &buffer[discriminant_size as usize..];
 
-        let field_type = RecordFieldType::parse(discriminant)?;
-        let field_size = field_type.size();
+            let field_type = RecordFieldType::parse(discriminant)?;
+            let field_size = field_type.size();
 
-        fields.push(RecordField {
-            offset: current_offset,
-            field_type,
-        });
+            fields.push(RecordField {
+                offset: current_offset,
+                field_type,
+            });
 
-        current_offset += field_size;
+            current_offset += field_size;
+        }
+
+        Ok(RecordHeader { fields })
     }
-
-    Ok(RecordHeader { fields })
 }

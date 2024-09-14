@@ -1,4 +1,4 @@
-use crate::{cursor::{parse_record_header, Cursor}, page::Page, pager::Pager};
+use crate::{cursor::{Cursor, RecordHeader}, page::Page, pager::Pager};
 
 #[derive(Debug)]
 pub struct Scanner<'p> {
@@ -26,7 +26,7 @@ impl<'p> Scanner<'p> {
             Page::TableLeaf(leaf) => {
                 let cell = leaf.cells.get(self.cell)?;
 
-                let header = match parse_record_header(&cell.payload) {
+                let header = match RecordHeader::parse(&cell.payload) {
                     Ok(header) => header,
                     Err(e) => return Some(Err(e)),
                 };

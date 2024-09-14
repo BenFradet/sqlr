@@ -9,6 +9,7 @@ mod page;
 mod pager;
 mod scanner;
 mod value;
+mod utils;
 
 fn main() -> anyhow::Result<()> {
     let db = Db::from_file(std::env::args().nth(1).context("missing db file argument")?)?;
