@@ -1,6 +1,11 @@
 use std::borrow::Cow;
 
-use crate::{page::Page, pager::{self, Pager}, utils, value::Value};
+use crate::{
+    page::Page,
+    pager::{self, Pager},
+    utils,
+    value::Value,
+};
 
 #[derive(Debug)]
 pub struct Cursor<'p> {
@@ -15,7 +20,7 @@ impl<'p> Cursor<'p> {
         header: RecordHeader,
         pager: &'p mut Pager,
         page_index: usize,
-        page_cell: usize
+        page_cell: usize,
     ) -> Self {
         Self {
             header,
@@ -43,15 +48,17 @@ impl<'p> Cursor<'p> {
             RecordFieldType::I64 => Some(Value::Int(read_i64_at(payload, record_field.offset))),
             RecordFieldType::Float => Some(Value::Float(read_f64_at(payload, record_field.offset))),
             RecordFieldType::String(length) => {
-                let value = std::str::from_utf8(&payload[record_field.offset..record_field.offset + length])
-                    .expect("invalid utf8");
+                let value = std::str::from_utf8(
+                    &payload[record_field.offset..record_field.offset + length],
+                )
+                .expect("invalid utf8");
                 Some(Value::String(Cow::Borrowed(value)))
-            },
+            }
             RecordFieldType::Blob(length) => {
                 let value = &payload[record_field.offset..record_field.offset + length];
                 Some(Value::Blob(Cow::Borrowed(value)))
-            },
-            _ => panic!("unimplemented")
+            }
+            _ => panic!("unimplemented"),
         }
     }
 }
@@ -116,11 +123,11 @@ impl RecordFieldType {
             n if n >= 12 && n % 2 == 0 => {
                 let size = ((n - 12) / 2) as usize;
                 Ok(RecordFieldType::Blob(size))
-            },
+            }
             n if n >= 13 && n % 2 == 1 => {
                 let size = ((n - 13) / 2) as usize;
                 Ok(RecordFieldType::String(size))
-            },
+            }
             n => Err(anyhow::anyhow!("unsupported field type: {}", n)),
         }
     }

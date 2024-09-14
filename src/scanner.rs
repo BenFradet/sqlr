@@ -1,4 +1,8 @@
-use crate::{cursor::{Cursor, RecordHeader}, page::Page, pager::Pager};
+use crate::{
+    cursor::{Cursor, RecordHeader},
+    page::Page,
+    pager::Pager,
+};
 
 #[derive(Debug)]
 pub struct Scanner<'p> {
@@ -31,12 +35,7 @@ impl<'p> Scanner<'p> {
                     Err(e) => return Some(Err(e)),
                 };
 
-                let record = Cursor::new(
-                    header,
-                    self.pager,
-                    self.page,
-                    self.cell,
-                );
+                let record = Cursor::new(header, self.pager, self.page, self.cell);
 
                 self.cell += 1;
 

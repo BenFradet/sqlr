@@ -11,7 +11,7 @@ pub struct DbHeader {
 
 pub const HEADER_SIZE: usize = 100;
 impl DbHeader {
-    const HEADER_PREFIX: &'static[u8] = b"SQLite format 3\0";
+    const HEADER_PREFIX: &'static [u8] = b"SQLite format 3\0";
     const HEADER_PAGE_SIZE_OFFSET: usize = 16;
 
     pub fn parse(buffer: &[u8]) -> anyhow::Result<DbHeader> {
@@ -24,7 +24,10 @@ impl DbHeader {
             let page_size = match page_size_raw {
                 1 => Ok(PAGE_MAX_SIZE),
                 n if n.is_power_of_two() => Ok(n as u32),
-                _ => Err(anyhow::anyhow!("page size is not a power of 2: {}", page_size_raw)),
+                _ => Err(anyhow::anyhow!(
+                    "page size is not a power of 2: {}",
+                    page_size_raw
+                )),
             };
             page_size.map(|page_size| DbHeader { page_size })
         }
@@ -41,7 +44,9 @@ impl Page {
         let ptr_offset = if page_num == 1 { HEADER_SIZE as u16 } else { 0 };
 
         match PageType::parse(buffer) {
-            Ok(PageType::TableLeaf) => TableLeafPage::parse(buffer, ptr_offset).map(|tlp| Page::TableLeaf(tlp)),
+            Ok(PageType::TableLeaf) => {
+                TableLeafPage::parse(buffer, ptr_offset).map(|tlp| Page::TableLeaf(tlp))
+            }
             _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
         }
     }
@@ -60,20 +65,19 @@ impl TableLeafPage {
         let header = PageHeader::parse(buffer)?;
 
         let content_buffer = &buffer[Self::PAGE_LEAF_HEADER_SIZE..];
-        let cell_pointers = Self::parse_cell_pointers(content_buffer, header.cell_count as usize, ptr_offset);
+        let cell_pointers =
+            Self::parse_cell_pointers(content_buffer, header.cell_count as usize, ptr_offset);
 
         let cells = cell_pointers
             .iter()
             .map(|&ptr| TableLeafCell::parse(&buffer[ptr as usize..]))
             .collect::<anyhow::Result<Vec<TableLeafCell>>>()?;
 
-        Ok(
-            TableLeafPage {
-                header,
-                cell_pointers,
-                cells,
-            }
-        )
+        Ok(TableLeafPage {
+            header,
+            cell_pointers,
+            cells,
+        })
     }
 
     // turns [u8] into [u16]
@@ -114,28 +118,27 @@ impl PageHeader {
     // 2 words at 8 byte offset => right most pointer in interior b-tree pages
     pub fn parse(buffer: &[u8]) -> anyhow::Result<PageHeader> {
         if buffer.len() < 7 {
-            return Err(anyhow::anyhow!("page header must be at least 7-byte long"))
+            return Err(anyhow::anyhow!("page header must be at least 7-byte long"));
         }
 
         let page_type = PageType::parse(buffer)?;
 
         let first_freeblock = utils::read_be_word_at(buffer, Self::PAGE_FIRST_FREEBLOCK_OFFSET);
         let cell_count = utils::read_be_word_at(buffer, Self::PAGE_CELL_COUNT_OFFSET);
-        let cell_content_offset = match utils::read_be_word_at(buffer, Self::PAGE_CELL_CONTENT_OFFSET) {
-            0 => PAGE_MAX_SIZE,
-            n => n as u32,
-        };
+        let cell_content_offset =
+            match utils::read_be_word_at(buffer, Self::PAGE_CELL_CONTENT_OFFSET) {
+                0 => PAGE_MAX_SIZE,
+                n => n as u32,
+            };
         let fragmented_bytes_count = buffer[Self::PAGE_FRAGMENTED_BYTES_COUNT_OFFSET];
 
-        Ok(
-            PageHeader {
-                page_type,
-                first_freeblock,
-                cell_count,
-                cell_content_offset,
-                fragmented_bytes_count,
-            }
-        )
+        Ok(PageHeader {
+            page_type,
+            first_freeblock,
+            cell_count,
+            cell_content_offset,
+            fragmented_bytes_count,
+        })
     }
 }
 
@@ -185,13 +188,11 @@ impl TableLeafCell {
             buffer.to_vec()
         };
 
-        Ok(
-            TableLeafCell {
-                size,
-                row_id,
-                payload,
-            }
-        )
+        Ok(TableLeafCell {
+            size,
+            row_id,
+            payload,
+        })
     }
 }
 
@@ -216,27 +217,27 @@ mod test {
         assert!(Page::parse(&[12], 0).is_err());
         let buffer = [
             // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0,
-            // cell pointer
-            0, 10,
-            // leaf cell (size, row id, payload)
-            10, 2, 127
+            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
+            0, 10, // leaf cell (size, row id, payload)
+            10, 2, 127,
         ];
         let res = Page::parse(&buffer, 0);
         assert!(res.is_ok());
-        let expected = Page::TableLeaf(
-            TableLeafPage {
-                header: PageHeader {
-                    page_type: PageType::TableLeaf,
-                    first_freeblock: 12,
-                    cell_count: 1,
-                    cell_content_offset: 65536,
-                    fragmented_bytes_count: 0,
-                },
-                cell_pointers: vec![10],
-                cells: vec!{TableLeafCell { size: 10, row_id: 2, payload: vec![127]}},
-            }
-        );
+        let expected = Page::TableLeaf(TableLeafPage {
+            header: PageHeader {
+                page_type: PageType::TableLeaf,
+                first_freeblock: 12,
+                cell_count: 1,
+                cell_content_offset: 65536,
+                fragmented_bytes_count: 0,
+            },
+            cell_pointers: vec![10],
+            cells: vec![TableLeafCell {
+                size: 10,
+                row_id: 2,
+                payload: vec![127],
+            }],
+        });
         assert_eq!(expected, res.unwrap());
     }
 
@@ -245,11 +246,9 @@ mod test {
         assert!(TableLeafPage::parse(&[12], 0).is_err());
         let buffer = [
             // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0,
-            // cell pointer
-            0, 10,
-            // leaf cell (size, row id, payload)
-            10, 2, 127
+            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
+            0, 10, // leaf cell (size, row id, payload)
+            10, 2, 127,
         ];
         let res = TableLeafPage::parse(&buffer, 0);
         assert!(res.is_ok());
@@ -262,16 +261,29 @@ mod test {
                 fragmented_bytes_count: 0,
             },
             cell_pointers: vec![10],
-            cells: vec!{TableLeafCell { size: 10, row_id: 2, payload: vec![127]}},
+            cells: vec![TableLeafCell {
+                size: 10,
+                row_id: 2,
+                payload: vec![127],
+            }],
         };
         assert_eq!(expected, res.unwrap());
     }
 
     #[test]
     fn parse_cell_pointers_test() -> () {
-        assert_eq!(vec![65535], TableLeafPage::parse_cell_pointers(&[255, 255], 1, 0));
-        assert_eq!(vec![65535], TableLeafPage::parse_cell_pointers(&[255, 255], 2, 0));
-        assert_eq!(vec![65435], TableLeafPage::parse_cell_pointers(&[255, 255], 1, HEADER_SIZE as u16));
+        assert_eq!(
+            vec![65535],
+            TableLeafPage::parse_cell_pointers(&[255, 255], 1, 0)
+        );
+        assert_eq!(
+            vec![65535],
+            TableLeafPage::parse_cell_pointers(&[255, 255], 2, 0)
+        );
+        assert_eq!(
+            vec![65435],
+            TableLeafPage::parse_cell_pointers(&[255, 255], 1, HEADER_SIZE as u16)
+        );
     }
 
     #[test]
@@ -298,7 +310,11 @@ mod test {
         let payload = 127;
         let input = [size, row_id, payload];
         let res = TableLeafCell::parse(&input);
-        let expected = TableLeafCell { size: size as i64, row_id: row_id as i64, payload: vec![payload] };
+        let expected = TableLeafCell {
+            size: size as i64,
+            row_id: row_id as i64,
+            payload: vec![payload],
+        };
         assert!(res.is_ok());
         assert_eq!(expected, res.unwrap());
     }

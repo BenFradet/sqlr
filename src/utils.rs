@@ -1,7 +1,7 @@
 // https://sqlite.org/src4/doc/trunk/www/varint.wiki
 //pub fn read_varint(buffer: &[u8], mut offset: usize) -> (u8, i64) {
 //    let mut size = 0;
-//    
+//
 //    let head = buffer[offset];
 //    match head {
 //        a0 if a0 >= 0 && a0 <= 240 => (1, a0 as i64),

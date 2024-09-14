@@ -1,4 +1,7 @@
-use std::{collections::HashMap, io::{Read, Seek}};
+use std::{
+    collections::HashMap,
+    io::{Read, Seek},
+};
 
 use anyhow::Context;
 

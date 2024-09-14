@@ -8,11 +8,15 @@ mod db;
 mod page;
 mod pager;
 mod scanner;
-mod value;
 mod utils;
+mod value;
 
 fn main() -> anyhow::Result<()> {
-    let db = Db::from_file(std::env::args().nth(1).context("missing db file argument")?)?;
+    let db = Db::from_file(
+        std::env::args()
+            .nth(1)
+            .context("missing db file argument")?,
+    )?;
     cli(db)
 }
 
@@ -40,12 +44,14 @@ fn display_tables(db: &mut Db) -> anyhow::Result<()> {
     let mut scanner = db.scanner(1);
 
     while let Some(Ok(mut record)) = scanner.next_record() {
-        let type_value = record.field(0)
+        let type_value = record
+            .field(0)
             .context("missing type field")
             .context("invalid type field")?;
 
         if type_value.as_str() == Some("table") {
-            let name_value = record.field(1)
+            let name_value = record
+                .field(1)
                 .context("missing name field")
                 .context("invalid name field")?;
             println!("{} ", name_value.as_str().unwrap());
