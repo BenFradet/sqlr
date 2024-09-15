@@ -38,27 +38,83 @@ impl<'p> Cursor<'p> {
 }
 
 fn read_i8_at(input: &[u8], offset: usize) -> i64 {
-    input[offset] as i64
+    if offset >= input.len() {
+        0
+    } else {
+        input[offset] as i64
+    }
 }
 
 fn read_i16_at(input: &[u8], offset: usize) -> i64 {
-    i16::from_be_bytes(input[offset..offset + 2].try_into().unwrap()) as i64
+    if offset + 2 <= input.len() {
+        i16::from_be_bytes(input[offset..offset + 2].try_into().unwrap()) as i64
+    } else {
+        read_i8_at(input, offset)
+    }
 }
 
 fn read_i24_at(input: &[u8], offset: usize) -> i64 {
-    (i32::from_be_bytes(input[offset..offset + 3].try_into().unwrap()) & 0x00FFFFFF) as i64
+    if offset + 3 <= input.len() {
+        // assume 2's complement
+        if input[offset] >= 128 {
+            (((
+                ((!input[offset] as i32) << 16) +
+                ((!input[offset + 1] as i32) << 8) +
+                ((!input[offset + 2] as i32) << 0) & 0x00FFFFFF
+            ) + 1) * - 1) as i64
+        } else {
+            (
+                ((input[offset] as i32) << 16) +
+                ((input[offset + 1] as i32) << 8) +
+                ((input[offset + 2] as i32) << 0) & 0x00FFFFFF
+            ) as i64
+        }
+    } else {
+        read_i16_at(input, offset)
+    }
 }
 
 fn read_i32_at(input: &[u8], offset: usize) -> i64 {
-    i32::from_be_bytes(input[offset..offset + 4].try_into().unwrap()) as i64
+    if offset + 4 <= input.len() {
+        i32::from_be_bytes(input[offset..offset + 4].try_into().unwrap()) as i64
+    } else {
+        read_i24_at(input, offset)
+    }
 }
 
 fn read_i48_at(input: &[u8], offset: usize) -> i64 {
-    i64::from_be_bytes(input[offset..offset + 6].try_into().unwrap()) & 0x0000FFFFFFFFFFFF
+    if offset + 6 <= input.len() {
+        // assume 2's complement
+        if input[offset] >= 128 {
+            (((
+                ((!input[offset] as i64) << 40) +
+                ((!input[offset + 1] as i64) << 32) +
+                ((!input[offset + 2] as i64) << 24) +
+                ((!input[offset + 3] as i64) << 16) +
+                ((!input[offset + 4] as i64) << 8) +
+                ((!input[offset + 5] as i64) << 0) & 0x0000FFFFFFFFFFFF
+            ) +1) * - 1) as i64
+        } else {
+            (
+                ((input[offset] as i64) << 40) +
+                ((input[offset + 1] as i64) << 32) +
+                ((input[offset + 2] as i64) << 24) +
+                ((input[offset + 3] as i64) << 16) +
+                ((input[offset + 4] as i64) << 8) +
+                ((input[offset + 5] as i64) << 0) & 0x0000FFFFFFFFFFFF
+            ) as i64
+        }
+    } else {
+        read_i32_at(input, offset)
+    }
 }
 
 fn read_i64_at(input: &[u8], offset: usize) -> i64 {
-    i64::from_be_bytes(input[offset..offset + 8].try_into().unwrap())
+    if offset + 8 <= input.len() {
+        i64::from_be_bytes(input[offset..offset + 8].try_into().unwrap())
+    } else {
+        read_i48_at(input, offset)
+    }
 }
 
 fn read_f64_at(input: &[u8], offset: usize) -> f64 {
@@ -188,6 +244,17 @@ impl RecordHeader {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn record_field_type_value_tests() -> () {
+        assert_eq!(Some(Value::Null), RecordFieldType::Null.value(&[], 0));
+        assert_eq!(Some(Value::Int(1)), RecordFieldType::I8.value(&[1], 0));
+        assert_eq!(Some(Value::Int(257)), RecordFieldType::I16.value(&[1, 1], 0));
+        assert_eq!(Some(Value::Int(65793)), RecordFieldType::I24.value(&[1, 1, 1], 0));
+        assert_eq!(Some(Value::Int(16843009)), RecordFieldType::I32.value(&[1, 1, 1, 1], 0));
+        assert_eq!(Some(Value::Int(1099511627777)), RecordFieldType::I48.value(&[1, 0, 0, 0, 0, 1], 0));
+        assert_eq!(Some(Value::Int(72057594037927936)), RecordFieldType::I64.value(&[1, 0, 0, 0, 0, 0, 0, 0], 0));
+    }
 
     #[test]
     fn parse_record_field_type_tests() -> () {

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value<'p> {
     Null,
     String(Cow<'p, str>),
