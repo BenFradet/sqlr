@@ -119,13 +119,13 @@ impl RecordFieldType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RecordField {
     pub offset: usize,
     pub field_type: RecordFieldType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RecordHeader {
     pub fields: Vec<RecordField>,
 }
@@ -133,6 +133,11 @@ pub struct RecordHeader {
 impl RecordHeader {
     pub fn parse(mut buffer: &[u8]) -> anyhow::Result<RecordHeader> {
         let (varint_size, header_length) = utils::read_varint_at(buffer, 0);
+
+        if header_length < varint_size as i64 || buffer.len() < header_length as usize {
+            anyhow::bail!("header length too large")
+        }
+
         buffer = &buffer[varint_size as usize..header_length as usize];
 
         let mut fields = Vec::new();
@@ -160,6 +165,22 @@ impl RecordHeader {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn record_header_parse_tests() -> () {
+        assert!(RecordHeader::parse(&vec![0b10000001, 0b01111111]).is_err());
+        // 10 record field type unsupported
+        assert!(RecordHeader::parse(&[2, 10]).is_err());
+        assert_eq!(
+            RecordHeader {
+                fields: vec![RecordField {
+                    offset: 2,
+                    field_type: RecordFieldType::Zero
+                }]
+            },
+            RecordHeader::parse(&[2, 8]).unwrap()
+        );
+    }
 
     #[test]
     fn record_field_type_value_tests() -> () {
