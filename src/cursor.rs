@@ -164,7 +164,28 @@ impl RecordHeader {
 
 #[cfg(test)]
 mod test {
+    use crate::page::{DbHeader, HEADER_SIZE};
+
     use super::*;
+
+    use std::io::Read;
+
+    #[test]
+    fn cursor_field_tests() -> () {
+        let mut file = std::fs::File::open("test.db").unwrap();
+        let mut header_buffer = [0; HEADER_SIZE];
+        file.read_exact(&mut header_buffer).unwrap();
+        let db_header = DbHeader::parse(&header_buffer).unwrap();
+        let mut pager = Pager::new(file, db_header.page_size as usize);
+        let page_nr = 1;
+        let page = pager.read_page(page_nr).unwrap();
+        let Page::TableLeaf(cell) = page;
+        let cell = cell.cells.get(0).unwrap();
+        let header = RecordHeader::parse(&cell.payload).unwrap();
+        let mut cursor = Cursor::new(header, &mut pager, 1, 0);
+        assert_eq!(Some(Value::String(Cow::from("table"))), cursor.field(0));
+        assert_eq!(Some(Value::String(Cow::from("tbl1"))), cursor.field(1));
+    }
 
     #[test]
     fn record_header_parse_tests() -> () {
