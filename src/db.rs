@@ -33,3 +33,20 @@ impl Db {
         Scanner::new(&mut self.pager, page)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    #[test]
+    fn from_file_tests() -> () {
+        let res = Db::from_file("test.db");
+        assert!(res.is_ok());
+        let db = res.unwrap();
+        assert_eq!(DbHeader { page_size: 4096 }, db.header);
+        assert_eq!(4096, db.pager.page_size);
+        assert_eq!(HashMap::new(), db.pager.pages);
+    }
+}

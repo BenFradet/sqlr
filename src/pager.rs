@@ -10,8 +10,8 @@ use crate::page::*;
 #[derive(Debug, Clone)]
 pub struct Pager<I: Read + Seek = std::fs::File> {
     input: I,
-    page_size: usize,
-    pages: HashMap<usize, Page>,
+    pub page_size: usize,
+    pub pages: HashMap<usize, Page>,
 }
 
 impl<I: Read + Seek> Pager<I> {
