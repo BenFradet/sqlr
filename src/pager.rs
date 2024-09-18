@@ -44,3 +44,63 @@ impl<I: Read + Seek> Pager<I> {
         Page::parse(&buffer, n)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn load_page_tests() -> () {
+        let file = std::fs::File::open("test.db").unwrap();
+        let mut pager = Pager::new(file, 4096);
+        assert!(pager.load_page(2).is_err());
+        let file = std::fs::File::open("test.db").unwrap();
+        let mut pager = Pager::new(file, 8192);
+        assert!(pager.load_page(0).is_err());
+        let file = std::fs::File::open("test_wrong_page_type.db").unwrap();
+        let mut pager = Pager::new(file, 4096);
+        assert!(pager.load_page(0).is_err());
+        let file = std::fs::File::open("test.db").unwrap();
+        let mut pager = Pager::new(file, 4096);
+        let page = pager.load_page(1);
+        assert!(page.is_ok());
+        assert_eq!(
+            page.unwrap(),
+            Page::TableLeaf(TableLeafPage {
+                header: PageHeader {
+                    page_type: PageType::TableLeaf,
+                    first_freeblock: 0,
+                    cell_count: 1,
+                    cell_content_offset: 4038,
+                    fragmented_bytes_count: 0
+                },
+                cell_pointers: vec![3938],
+                cells: vec![TableLeafCell {
+                    size: 56,
+                    row_id: 1,
+                    payload: vec![
+                        6, 23, 21, 21, 1, 85, 116, 97, 98, 108, 101, 116, 98, 108, 49, 116, 98,
+                        108, 49, 2, 67, 82, 69, 65, 84, 69, 32, 84, 65, 66, 76, 69, 32, 116, 98,
+                        108, 49, 40, 111, 110, 101, 32, 116, 101, 120, 116, 44, 32, 116, 119, 111,
+                        32, 105, 110, 116, 41
+                    ]
+                }]
+            })
+        )
+    }
+
+    #[test]
+    fn read_page_tests() -> () {
+        let file = std::fs::File::open("test.db").unwrap();
+        let mut pager = Pager::new(file, 4096);
+        let pages = pager.pages.clone();
+        assert_eq!(pages.len(), 0);
+        let res = pager.read_page(1);
+        assert!(res.is_ok());
+        let page = res.unwrap().clone();
+        let pages = pager.pages;
+        assert_eq!(pages.len(), 1);
+        let page_opt = pages.get(&1).cloned();
+        assert_eq!(Some(page), page_opt);
+    }
+}
