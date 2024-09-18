@@ -44,3 +44,24 @@ impl<'p> Scanner<'p> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn next_record_tests() -> () {
+        let file = std::fs::File::open("test.db").unwrap();
+        let mut pager = Pager::new(file, 4096);
+        let mut scanner = Scanner::new(&mut pager, 4);
+        let res = scanner.next_record();
+        assert!(res.is_some());
+        assert!(res.unwrap().is_err());
+        let mut scanner = Scanner::new(&mut pager, 1);
+        let res = scanner.next_record();
+        assert!(res.is_some());
+        assert!(res.unwrap().is_ok());
+        let res = scanner.next_record();
+        assert!(res.is_none());
+    }
+}
