@@ -72,7 +72,8 @@ mod test {
                     first_freeblock: 0,
                     cell_count: 1,
                     cell_content_offset: 4038,
-                    fragmented_bytes_count: 0
+                    fragmented_bytes_count: 0,
+                    rightmost_pointer: None,
                 },
                 cell_pointers: vec![3938],
                 cells: vec![TableLeafCell {

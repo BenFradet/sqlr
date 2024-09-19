@@ -95,6 +95,7 @@ impl TableLeafPage {
     }
 }
 
+// convert to sum type? TableLeafHeader + TableInteriorHeader
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct PageHeader {
     pub page_type: PageType,
@@ -102,6 +103,7 @@ pub struct PageHeader {
     pub cell_count: u16,
     pub cell_content_offset: u32,
     pub fragmented_bytes_count: u8,
+    pub rightmost_pointer: Option<u32>,
 }
 
 impl PageHeader {
@@ -109,6 +111,10 @@ impl PageHeader {
     const PAGE_CELL_COUNT_OFFSET: usize = 3;
     const PAGE_CELL_CONTENT_OFFSET: usize = 5;
     const PAGE_FRAGMENTED_BYTES_COUNT_OFFSET: usize = 7;
+    const PAGE_RIGHTMOST_POINTER_OFFSET: usize = 8;
+
+    const PAGE_HEADER_SIZE_LEAF: usize = 8;
+    const PAGE_HEADER_SIZE_INTERIOR: usize = 12;
 
     // 0th byte => 13 for a table btree leaf
     // word at 1 byte offset => first free block offset in the page, 0 if no free block
@@ -132,23 +138,40 @@ impl PageHeader {
             };
         let fragmented_bytes_count = buffer[Self::PAGE_FRAGMENTED_BYTES_COUNT_OFFSET];
 
+        let rightmost_pointer = if page_type == PageType::TableInterior {
+            Some(utils::read_be_double_word_at(buffer, Self::PAGE_RIGHTMOST_POINTER_OFFSET))
+        } else {
+            None
+        };
+
         Ok(PageHeader {
             page_type,
             first_freeblock,
             cell_count,
             cell_content_offset,
             fragmented_bytes_count,
+            rightmost_pointer,
         })
+    }
+
+    pub fn byte_size(&self) -> usize {
+        if self.rightmost_pointer.is_some() {
+            Self::PAGE_HEADER_SIZE_INTERIOR
+        } else {
+            Self::PAGE_HEADER_SIZE_LEAF
+        }
     }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PageType {
     TableLeaf,
+    TableInterior,
 }
 
 impl PageType {
     const PAGE_LEAF_TABLE_ID: u8 = 13;
+    const PAGE_INTERIOR_TABLE_ID: u8 = 5;
 
     // 2: interior index b-tree page
     // 5: interior table b-tree page
@@ -157,6 +180,7 @@ impl PageType {
     fn parse(buffer: &[u8]) -> anyhow::Result<PageType> {
         match buffer[0] {
             Self::PAGE_LEAF_TABLE_ID => Ok(PageType::TableLeaf),
+            Self::PAGE_INTERIOR_TABLE_ID => Ok(PageType::TableInterior),
             _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
         }
     }
@@ -230,6 +254,7 @@ mod test {
                 cell_count: 1,
                 cell_content_offset: 65536,
                 fragmented_bytes_count: 0,
+                rightmost_pointer: None,
             },
             cell_pointers: vec![10],
             cells: vec![TableLeafCell {
@@ -259,6 +284,7 @@ mod test {
                 cell_count: 1,
                 cell_content_offset: 65536,
                 fragmented_bytes_count: 0,
+                rightmost_pointer: None,
             },
             cell_pointers: vec![10],
             cells: vec![TableLeafCell {
@@ -299,6 +325,7 @@ mod test {
             cell_count: 11,
             cell_content_offset: 65536,
             fragmented_bytes_count: 0,
+            rightmost_pointer: None,
         };
         assert_eq!(expected, res.unwrap());
     }
