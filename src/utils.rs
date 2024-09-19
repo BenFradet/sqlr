@@ -81,6 +81,15 @@ pub fn read_be_word_at(input: &[u8], offset: usize) -> u16 {
     }
 }
 
+pub fn read_be_double_word_at(input: &[u8], offset: usize) -> u32 {
+    let len = input.len();
+    if len >= offset + 4 {
+        u32::from_be_bytes(input[offset..offset + 4].try_into().unwrap())
+    } else {
+        read_be_word_at(input, offset) as u32
+    }
+}
+
 pub fn read_i8_at(input: &[u8], offset: usize) -> i64 {
     if offset >= input.len() {
         0
@@ -340,16 +349,20 @@ mod test {
     }
 
     #[test]
-    fn read_be_word_at_0_offset() -> () {
-        let input = [12, 14];
-        let res = read_be_word_at(&input, 0);
-        assert_eq!(res, 3086);
-    }
-
-    #[test]
-    fn read_be_word_at_offset() -> () {
+    fn read_be_word_at_tests() -> () {
+        assert_eq!(3086, read_be_word_at(&[12, 14], 0));
         assert_eq!(3086, read_be_word_at(&[255, 12, 14], 1));
         assert_eq!(255, read_be_word_at(&[255], 0));
         assert_eq!(0, read_be_word_at(&[255], 1));
+    }
+
+    #[test]
+    fn read_be_double_word_at_tests() -> () {
+        assert_eq!(202182159, read_be_double_word_at(&[12, 13, 14, 15], 0));
+        assert_eq!(202182159, read_be_double_word_at(&[11, 12, 13, 14, 15], 1));
+        assert_eq!(3086, read_be_double_word_at(&[12, 14], 0));
+        assert_eq!(3086, read_be_double_word_at(&[255, 12, 14], 1));
+        assert_eq!(255, read_be_double_word_at(&[255], 0));
+        assert_eq!(0, read_be_double_word_at(&[255], 1));
     }
 }
