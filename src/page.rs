@@ -66,7 +66,7 @@ impl TableLeafPage {
 
         let content_buffer = &buffer[Self::PAGE_LEAF_HEADER_SIZE..];
         let cell_pointers =
-            Self::parse_cell_pointers(content_buffer, header.cell_count as usize, ptr_offset);
+            Self::parse_cell_pointers(content_buffer, header.cell_count() as usize, ptr_offset);
 
         let cells = cell_pointers
             .iter()
@@ -95,15 +95,21 @@ impl TableLeafPage {
     }
 }
 
-// convert to sum type? TableLeafHeader + TableInteriorHeader
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct PageHeader {
-    pub page_type: PageType,
-    pub first_freeblock: u16,
-    pub cell_count: u16,
-    pub cell_content_offset: u32,
-    pub fragmented_bytes_count: u8,
-    pub rightmost_pointer: Option<u32>,
+pub enum PageHeader {
+    TableLeafPageHeader {
+        first_freeblock: u16,
+        cell_count: u16,
+        cell_content_offset: u32,
+        fragmented_bytes_count: u8,
+    },
+    TableInteriorPageHeader {
+        first_freeblock: u16,
+        cell_count: u16,
+        cell_content_offset: u32,
+        fragmented_bytes_count: u8,
+        rightmost_pointer: u32,
+    },
 }
 
 impl PageHeader {
@@ -138,27 +144,86 @@ impl PageHeader {
             };
         let fragmented_bytes_count = buffer[Self::PAGE_FRAGMENTED_BYTES_COUNT_OFFSET];
 
-        let rightmost_pointer = if page_type == PageType::TableInterior {
-            Some(utils::read_be_double_word_at(buffer, Self::PAGE_RIGHTMOST_POINTER_OFFSET))
+        let header = if page_type == PageType::TableInterior {
+            PageHeader::TableInteriorPageHeader {
+                first_freeblock,
+                cell_count,
+                cell_content_offset,
+                fragmented_bytes_count,
+                rightmost_pointer: utils::read_be_double_word_at(
+                    buffer,
+                    Self::PAGE_RIGHTMOST_POINTER_OFFSET,
+                ),
+            }
         } else {
-            None
+            PageHeader::TableLeafPageHeader {
+                first_freeblock,
+                cell_count,
+                cell_content_offset,
+                fragmented_bytes_count,
+            }
         };
 
-        Ok(PageHeader {
-            page_type,
-            first_freeblock,
-            cell_count,
-            cell_content_offset,
-            fragmented_bytes_count,
-            rightmost_pointer,
-        })
+        Ok(header)
+    }
+
+    pub fn first_freeblock(&self) -> u16 {
+        match *self {
+            PageHeader::TableInteriorPageHeader {
+                first_freeblock, ..
+            }
+            | PageHeader::TableLeafPageHeader {
+                first_freeblock, ..
+            } => first_freeblock,
+        }
+    }
+
+    pub fn cell_count(&self) -> u16 {
+        match *self {
+            PageHeader::TableInteriorPageHeader { cell_count, .. }
+            | PageHeader::TableLeafPageHeader { cell_count, .. } => cell_count,
+        }
+    }
+
+    pub fn cell_content_offset(&self) -> u32 {
+        match *self {
+            PageHeader::TableInteriorPageHeader {
+                cell_content_offset,
+                ..
+            }
+            | PageHeader::TableLeafPageHeader {
+                cell_content_offset,
+                ..
+            } => cell_content_offset,
+        }
+    }
+
+    pub fn fragmented_bytes_count(&self) -> u8 {
+        match *self {
+            PageHeader::TableInteriorPageHeader {
+                fragmented_bytes_count,
+                ..
+            }
+            | PageHeader::TableLeafPageHeader {
+                fragmented_bytes_count,
+                ..
+            } => fragmented_bytes_count,
+        }
+    }
+
+    pub fn rightmost_pointer(&self) -> Option<u32> {
+        match *self {
+            PageHeader::TableInteriorPageHeader {
+                rightmost_pointer, ..
+            } => Some(rightmost_pointer),
+            PageHeader::TableLeafPageHeader { .. } => None,
+        }
     }
 
     pub fn byte_size(&self) -> usize {
-        if self.rightmost_pointer.is_some() {
-            Self::PAGE_HEADER_SIZE_INTERIOR
-        } else {
-            Self::PAGE_HEADER_SIZE_LEAF
+        match self {
+            PageHeader::TableInteriorPageHeader { .. } => Self::PAGE_HEADER_SIZE_INTERIOR,
+            PageHeader::TableLeafPageHeader { .. } => Self::PAGE_HEADER_SIZE_LEAF,
         }
     }
 }
@@ -248,13 +313,11 @@ mod test {
         let res = Page::parse(&buffer, 0);
         assert!(res.is_ok());
         let expected = Page::TableLeaf(TableLeafPage {
-            header: PageHeader {
-                page_type: PageType::TableLeaf,
+            header: PageHeader::TableLeafPageHeader {
                 first_freeblock: 12,
                 cell_count: 1,
                 cell_content_offset: 65536,
                 fragmented_bytes_count: 0,
-                rightmost_pointer: None,
             },
             cell_pointers: vec![10],
             cells: vec![TableLeafCell {
@@ -278,13 +341,11 @@ mod test {
         let res = TableLeafPage::parse(&buffer, 0);
         assert!(res.is_ok());
         let expected = TableLeafPage {
-            header: PageHeader {
-                page_type: PageType::TableLeaf,
+            header: PageHeader::TableLeafPageHeader {
                 first_freeblock: 12,
                 cell_count: 1,
                 cell_content_offset: 65536,
                 fragmented_bytes_count: 0,
-                rightmost_pointer: None,
             },
             cell_pointers: vec![10],
             cells: vec![TableLeafCell {
@@ -319,13 +380,11 @@ mod test {
         assert!(PageHeader::parse(&[12, 0, 12, 0, 11, 0, 10, 0]).is_err());
         let res = PageHeader::parse(&[13, 0, 12, 0, 11, 0, 0, 0]);
         assert!(res.is_ok());
-        let expected = PageHeader {
-            page_type: PageType::TableLeaf,
+        let expected = PageHeader::TableLeafPageHeader {
             first_freeblock: 12,
             cell_count: 11,
             cell_content_offset: 65536,
             fragmented_bytes_count: 0,
-            rightmost_pointer: None,
         };
         assert_eq!(expected, res.unwrap());
     }
