@@ -164,7 +164,7 @@ impl RecordHeader {
 
 #[cfg(test)]
 mod test {
-    use crate::page::{DbHeader, HEADER_SIZE};
+    use crate::{db::DbHeader, page::HEADER_SIZE};
 
     use super::*;
 
