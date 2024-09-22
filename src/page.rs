@@ -261,6 +261,33 @@ mod test {
     use super::*;
 
     #[test]
+    fn page_header_accessor_tests() -> () {
+        let leaf = PageHeader::TableLeafPageHeader {
+            first_freeblock: 12,
+            cell_count: 1,
+            cell_content_offset: 65536,
+            fragmented_bytes_count: 0,
+        };
+        let interior = PageHeader::TableInteriorPageHeader {
+            first_freeblock: 12,
+            cell_count: 1,
+            cell_content_offset: 65536,
+            fragmented_bytes_count: 0,
+            rightmost_pointer: 12,
+        };
+        assert_eq!(leaf.cell_content_offset(), 65536);
+        assert_eq!(interior.cell_content_offset(), 65536);
+        assert_eq!(leaf.cell_count(), 1);
+        assert_eq!(interior.cell_count(), 1);
+        assert_eq!(leaf.first_freeblock(), 12);
+        assert_eq!(interior.first_freeblock(), 12);
+        assert_eq!(leaf.fragmented_bytes_count(), 0);
+        assert_eq!(interior.fragmented_bytes_count(), 0);
+        assert_eq!(leaf.rightmost_pointer(), None);
+        assert_eq!(interior.rightmost_pointer(), Some(12));
+    }
+
+    #[test]
     fn parse_page_tests() -> () {
         assert!(Page::parse(&[12], 0).is_err());
         let buffer = [
@@ -337,15 +364,36 @@ mod test {
         // first byte must be 13 for a table b-tree leaf
         assert!(PageHeader::parse(&[12]).is_err());
         assert!(PageHeader::parse(&[12, 0, 12, 0, 11, 0, 10, 0]).is_err());
-        let res = PageHeader::parse(&[13, 0, 12, 0, 11, 0, 0, 0]);
-        assert!(res.is_ok());
-        let expected = PageHeader::TableLeafPageHeader {
-            first_freeblock: 12,
-            cell_count: 11,
-            cell_content_offset: 65536,
-            fragmented_bytes_count: 0,
-        };
-        assert_eq!(expected, res.unwrap());
+        assert_eq!(
+            PageHeader::TableLeafPageHeader {
+                first_freeblock: 12,
+                cell_count: 11,
+                cell_content_offset: 65536,
+                fragmented_bytes_count: 0,
+            },
+            PageHeader::parse(&[13, 0, 12, 0, 11, 0, 0, 0]).unwrap()
+        );
+        // interior
+        assert_eq!(
+            PageHeader::TableInteriorPageHeader {
+                first_freeblock: 12,
+                cell_count: 11,
+                cell_content_offset: 65536,
+                fragmented_bytes_count: 0,
+                rightmost_pointer: 16909060,
+            },
+            PageHeader::parse(&[5, 0, 12, 0, 11, 0, 0, 0, 1, 2, 3, 4]).unwrap(),
+        );
+        assert_eq!(
+            PageHeader::TableInteriorPageHeader {
+                first_freeblock: 12,
+                cell_count: 11,
+                cell_content_offset: 65536,
+                fragmented_bytes_count: 0,
+                rightmost_pointer: 0,
+            },
+            PageHeader::parse(&[5, 0, 12, 0, 11, 0, 0, 0]).unwrap(),
+        );
     }
 
     #[test]
