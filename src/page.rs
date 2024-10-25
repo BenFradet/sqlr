@@ -285,6 +285,8 @@ mod test {
         assert_eq!(interior.fragmented_bytes_count(), 0);
         assert_eq!(leaf.rightmost_pointer(), None);
         assert_eq!(interior.rightmost_pointer(), Some(12));
+        assert_eq!(leaf.byte_size(), 8);
+        assert_eq!(interior.byte_size(), 12);
     }
 
     #[test]
