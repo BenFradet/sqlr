@@ -29,8 +29,8 @@ pub struct TableInteriorCell {
 
 impl TableInteriorCell {
     pub fn parse(mut buffer: &[u8]) -> anyhow::Result<Cell> {
-        let left_child_page = utils::read_be_double_word_at(buffer, 0);
-        buffer = &buffer[4..];
+        let (n, left_child_page) = utils::read_be_double_word_at(buffer, 0);
+        buffer = &buffer[n as usize..];
         
         let (_, key) = utils::read_varint_at(buffer, 0);
         Ok(TableInteriorCell {
@@ -89,6 +89,20 @@ mod test {
             size: size as i64,
             row_id: row_id as i64,
             payload: vec![payload],
+        });
+        assert!(res.is_ok());
+        assert_eq!(expected, res.unwrap());
+    }
+
+    #[test]
+    fn parse_table_interior_cell_tests() -> () {
+        let left_child_page = 10;
+        let key = 127;
+        let input = [0, 0, 0, left_child_page, key];
+        let res = TableInteriorCell::parse(&input);
+        let expected = Cell::TableInterior(TableInteriorCell {
+            left_child_page: left_child_page as u32,
+            key: key as i64,
         });
         assert!(res.is_ok());
         assert_eq!(expected, res.unwrap());

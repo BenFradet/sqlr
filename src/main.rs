@@ -43,7 +43,7 @@ fn cli(mut db: Db) -> anyhow::Result<()> {
 fn display_tables(db: &mut Db) -> anyhow::Result<()> {
     let mut scanner = db.scanner(1);
 
-    while let Some(mut record) = scanner.next_record()? {
+    while let Some(record) = scanner.next_record()? {
         let type_value = record
             .field(0)
             .context("missing type field")

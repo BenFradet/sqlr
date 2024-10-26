@@ -19,7 +19,7 @@ impl DbHeader {
             let prefix = String::from_utf8_lossy(&buffer[..len]);
             Err(anyhow::anyhow!("invalid header prefix: {prefix}"))
         } else {
-            let page_size_raw = utils::read_be_word_at(buffer, Self::HEADER_PAGE_SIZE_OFFSET);
+            let page_size_raw = utils::read_be_word_at(buffer, Self::HEADER_PAGE_SIZE_OFFSET).1;
             let page_size = match page_size_raw {
                 1 => Ok(page_header::PAGE_MAX_SIZE),
                 n if n.is_power_of_two() => Ok(n as u32),

@@ -57,7 +57,7 @@ impl Page {
         for i in 0..n {
             let offset = 2 * i;
             if offset + 2 <= buffer.len() {
-                pointers.push(utils::read_be_word_at(buffer, offset) - ptr_offset);
+                pointers.push(utils::read_be_word_at(buffer, offset).1 - ptr_offset);
             } else {
                 break;
             }

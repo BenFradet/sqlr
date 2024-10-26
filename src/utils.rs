@@ -70,23 +70,24 @@ fn read_varint_rec(buffer: &[u8], offset: usize) -> (u8, i64) {
     go(buffer, offset, 0, 0)
 }
 
-pub fn read_be_word_at(input: &[u8], offset: usize) -> u16 {
+pub fn read_be_word_at(input: &[u8], offset: usize) -> (u8, u16) {
     let len = input.len();
     if len >= offset + 2 {
-        u16::from_be_bytes(input[offset..offset + 2].try_into().unwrap())
+        (2, u16::from_be_bytes(input[offset..offset + 2].try_into().unwrap()))
     } else if len > offset {
-        input[offset] as u16
+        (1, input[offset] as u16)
     } else {
-        0
+        (0, 0)
     }
 }
 
-pub fn read_be_double_word_at(input: &[u8], offset: usize) -> u32 {
+pub fn read_be_double_word_at(input: &[u8], offset: usize) -> (u8, u32) {
     let len = input.len();
     if len >= offset + 4 {
-        u32::from_be_bytes(input[offset..offset + 4].try_into().unwrap())
+        (4, u32::from_be_bytes(input[offset..offset + 4].try_into().unwrap()))
     } else {
-        read_be_word_at(input, offset) as u32
+        let (s, r) = read_be_word_at(input, offset);
+        (s, r as u32)
     }
 }
 
@@ -350,19 +351,19 @@ mod test {
 
     #[test]
     fn read_be_word_at_tests() -> () {
-        assert_eq!(3086, read_be_word_at(&[12, 14], 0));
-        assert_eq!(3086, read_be_word_at(&[255, 12, 14], 1));
-        assert_eq!(255, read_be_word_at(&[255], 0));
-        assert_eq!(0, read_be_word_at(&[255], 1));
+        assert_eq!((2, 3086), read_be_word_at(&[12, 14], 0));
+        assert_eq!((2, 3086), read_be_word_at(&[255, 12, 14], 1));
+        assert_eq!((1, 255), read_be_word_at(&[255], 0));
+        assert_eq!((0, 0), read_be_word_at(&[255], 1));
     }
 
     #[test]
     fn read_be_double_word_at_tests() -> () {
-        assert_eq!(202182159, read_be_double_word_at(&[12, 13, 14, 15], 0));
-        assert_eq!(202182159, read_be_double_word_at(&[11, 12, 13, 14, 15], 1));
-        assert_eq!(3086, read_be_double_word_at(&[12, 14], 0));
-        assert_eq!(3086, read_be_double_word_at(&[255, 12, 14], 1));
-        assert_eq!(255, read_be_double_word_at(&[255], 0));
-        assert_eq!(0, read_be_double_word_at(&[255], 1));
+        assert_eq!((4, 202182159), read_be_double_word_at(&[12, 13, 14, 15], 0));
+        assert_eq!((4, 202182159), read_be_double_word_at(&[11, 12, 13, 14, 15], 1));
+        assert_eq!((2, 3086), read_be_double_word_at(&[12, 14], 0));
+        assert_eq!((2, 3086), read_be_double_word_at(&[255, 12, 14], 1));
+        assert_eq!((1, 255), read_be_double_word_at(&[255], 0));
+        assert_eq!((0, 0), read_be_double_word_at(&[255], 1));
     }
 }

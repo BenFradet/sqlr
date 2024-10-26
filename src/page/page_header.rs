@@ -45,10 +45,10 @@ impl PageHeader {
 
         let page_type = PageType::parse(buffer)?;
 
-        let first_freeblock = utils::read_be_word_at(buffer, Self::PAGE_FIRST_FREEBLOCK_OFFSET);
-        let cell_count = utils::read_be_word_at(buffer, Self::PAGE_CELL_COUNT_OFFSET);
+        let first_freeblock = utils::read_be_word_at(buffer, Self::PAGE_FIRST_FREEBLOCK_OFFSET).1;
+        let cell_count = utils::read_be_word_at(buffer, Self::PAGE_CELL_COUNT_OFFSET).1;
         let cell_content_offset =
-            match utils::read_be_word_at(buffer, Self::PAGE_CELL_CONTENT_OFFSET) {
+            match utils::read_be_word_at(buffer, Self::PAGE_CELL_CONTENT_OFFSET).1 {
                 0 => PAGE_MAX_SIZE,
                 n => n as u32,
             };
@@ -63,7 +63,7 @@ impl PageHeader {
                 rightmost_pointer: utils::read_be_double_word_at(
                     buffer,
                     Self::PAGE_RIGHTMOST_POINTER_OFFSET,
-                ),
+                ).1,
             }
         } else {
             PageHeader::TableLeafPageHeader {
