@@ -2,7 +2,7 @@ use std::{io::Read, path::Path};
 
 use anyhow::Context;
 
-use crate::{page::{self, page_header}, pager::Pager, scanner::Scanner, utils};
+use crate::{page::{self, page_header, pager::Pager}, scanner::Scanner, utils};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DbHeader {

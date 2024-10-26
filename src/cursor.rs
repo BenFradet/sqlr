@@ -1,46 +1,28 @@
-use crate::{page::cell::Cell, pager::Pager, record::record_header::RecordHeader, value::Value};
+use crate::{record::record_header::RecordHeader, value::Value};
 
 #[derive(Debug)]
-pub struct Cursor<'p> {
-    header: RecordHeader,
-    pager: &'p mut Pager,
-    page_index: usize,
-    page_cell: usize,
+pub struct Cursor {
+    pub header: RecordHeader,
+    pub payload: Vec<u8>
 }
 
-impl<'p> Cursor<'p> {
+impl Cursor {
     pub fn new(
         header: RecordHeader,
-        pager: &'p mut Pager,
-        page_index: usize,
-        page_cell: usize,
+        payload: Vec<u8>,
     ) -> Self {
-        Self {
-            header,
-            pager,
-            page_index,
-            page_cell,
-        }
+        Self { header, payload }
     }
 
-    pub fn field(&mut self, n: usize) -> Option<Value> {
+    pub fn field(&self, n: usize) -> Option<Value> {
         let record_field = self.header.fields.get(n)?;
-
-        let payload = match self.pager.read_page(self.page_index) {
-            Ok(page) => match &page.cells[self.page_cell] {
-                Cell::TableLeaf(leaf) => &leaf.payload,
-                _ => return None,
-            },
-            _ => return None,
-        };
-
-        record_field.field_type.value(&payload, record_field.offset)
+        record_field.field_type.value(&self.payload, record_field.offset)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{db::DbHeader, page::page::HEADER_SIZE, record::record_header::RecordHeader};
+    use crate::{db::DbHeader, page::{cell::Cell, page::HEADER_SIZE, pager::Pager}, record::record_header::RecordHeader};
 
     use super::*;
 
@@ -56,11 +38,11 @@ mod test {
         let page_nr = 1;
         let page = pager.read_page(page_nr).unwrap();
         let cell = page.cells.get(0).unwrap();
-        let header = match cell {
-            Cell::TableLeaf(c) => RecordHeader::parse(&c.payload).unwrap(),
+        let (header, payload) = match cell {
+            Cell::TableLeaf(c) => (RecordHeader::parse(&c.payload).unwrap(), c.payload.clone()),
             Cell::TableInterior(c) => panic!("not a leaf: {:?}", c),
         };
-        let mut cursor = Cursor::new(header, &mut pager, 1, 0);
+        let cursor = Cursor::new(header, payload);
         assert_eq!(Some(Value::String(Cow::from("table"))), cursor.field(0));
         assert_eq!(Some(Value::String(Cow::from("tbl1"))), cursor.field(1));
     }
