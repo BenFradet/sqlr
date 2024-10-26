@@ -1,6 +1,6 @@
-use crate::{cell::{Cell, TableInteriorCell, TableLeafCell}, utils};
+use crate::utils;
 
-use super::page_header::PageHeader;
+use super::{cell::{Cell, TableInteriorCell, TableLeafCell}, page_header::PageHeader};
 
 pub const HEADER_SIZE: usize = 100;
 

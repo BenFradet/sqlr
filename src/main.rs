@@ -3,11 +3,11 @@ use std::io::{stdin, BufRead, Write};
 use anyhow::Context;
 use db::Db;
 
-mod cell;
 mod cursor;
 mod db;
 mod page;
 mod pager;
+mod record;
 mod scanner;
 mod utils;
 mod value;

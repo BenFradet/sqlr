@@ -47,7 +47,7 @@ impl<I: Read + Seek> Pager<I> {
 
 #[cfg(test)]
 mod test {
-    use crate::{cell::TableLeafCell, page::page_header::PageHeader};
+    use crate::page::{cell::TableLeafCell, page_header::PageHeader};
 
     use super::*;
 

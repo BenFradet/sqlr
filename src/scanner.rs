@@ -1,6 +1,4 @@
-use crate::{
-    cell::Cell, cursor::{Cursor, RecordHeader}, pager::Pager
-};
+use crate::{cursor::Cursor, page::cell::Cell, pager::Pager, record::record_header::RecordHeader};
 
 #[derive(Debug)]
 pub struct Scanner<'p> {
