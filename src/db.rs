@@ -2,7 +2,7 @@ use std::{io::Read, path::Path};
 
 use anyhow::Context;
 
-use crate::{page, pager::Pager, scanner::Scanner, utils};
+use crate::{page::{self, page_header}, pager::Pager, scanner::Scanner, utils};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DbHeader {
@@ -21,7 +21,7 @@ impl DbHeader {
         } else {
             let page_size_raw = utils::read_be_word_at(buffer, Self::HEADER_PAGE_SIZE_OFFSET);
             let page_size = match page_size_raw {
-                1 => Ok(page::PAGE_MAX_SIZE),
+                1 => Ok(page_header::PAGE_MAX_SIZE),
                 n if n.is_power_of_two() => Ok(n as u32),
                 _ => Err(anyhow::anyhow!(
                     "page size is not a power of 2: {}",
@@ -43,7 +43,7 @@ impl Db {
     pub fn from_file(filename: impl AsRef<Path>) -> anyhow::Result<Db> {
         let mut file = std::fs::File::open(filename.as_ref()).context("open db file")?;
 
-        let mut header_buffer = [0; page::HEADER_SIZE];
+        let mut header_buffer = [0; page::page::HEADER_SIZE];
         file.read_exact(&mut header_buffer)
             .context("read db header")?;
 

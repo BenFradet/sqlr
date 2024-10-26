@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{page::Page, pager::Pager, utils, value::Value};
+use crate::{cell::Cell, pager::Pager, utils, value::Value};
 
 #[derive(Debug)]
 pub struct Cursor<'p> {
@@ -29,11 +29,14 @@ impl<'p> Cursor<'p> {
         let record_field = self.header.fields.get(n)?;
 
         let payload = match self.pager.read_page(self.page_index) {
-            Ok(Page::TableLeaf(leaf)) => &leaf.cells[self.page_cell].payload,
+            Ok(page) => match &page.cells[self.page_cell] {
+                Cell::TableLeaf(leaf) => &leaf.payload,
+                _ => return None,
+            },
             _ => return None,
         };
 
-        record_field.field_type.value(payload, record_field.offset)
+        record_field.field_type.value(&payload, record_field.offset)
     }
 }
 
@@ -164,7 +167,7 @@ impl RecordHeader {
 
 #[cfg(test)]
 mod test {
-    use crate::{db::DbHeader, page::HEADER_SIZE};
+    use crate::{db::DbHeader, page::page::HEADER_SIZE};
 
     use super::*;
 
@@ -179,9 +182,11 @@ mod test {
         let mut pager = Pager::new(file, db_header.page_size as usize);
         let page_nr = 1;
         let page = pager.read_page(page_nr).unwrap();
-        let Page::TableLeaf(cell) = page;
-        let cell = cell.cells.get(0).unwrap();
-        let header = RecordHeader::parse(&cell.payload).unwrap();
+        let cell = page.cells.get(0).unwrap();
+        let header = match cell {
+            Cell::TableLeaf(c) => RecordHeader::parse(&c.payload).unwrap(),
+            Cell::TableInterior(c) => panic!("not a leaf: {:?}", c),
+        };
         let mut cursor = Cursor::new(header, &mut pager, 1, 0);
         assert_eq!(Some(Value::String(Cow::from("table"))), cursor.field(0));
         assert_eq!(Some(Value::String(Cow::from("tbl1"))), cursor.field(1));

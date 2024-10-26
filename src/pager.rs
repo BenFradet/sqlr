@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 
-use crate::page::*;
+use crate::page::page::{self, Page};
 
 #[derive(Debug, Clone)]
 pub struct Pager<I: Read + Seek = std::fs::File> {
@@ -32,7 +32,7 @@ impl<I: Read + Seek> Pager<I> {
     }
 
     fn load_page(&mut self, n: usize) -> anyhow::Result<Page> {
-        let offset = HEADER_SIZE + n.saturating_sub(1) * self.page_size;
+        let offset = page::HEADER_SIZE + n.saturating_sub(1) * self.page_size;
 
         self.input
             .seek(std::io::SeekFrom::Start(offset as u64))
@@ -47,6 +47,8 @@ impl<I: Read + Seek> Pager<I> {
 
 #[cfg(test)]
 mod test {
+    use crate::{cell::TableLeafCell, page::page_header::PageHeader};
+
     use super::*;
 
     #[test]
@@ -66,7 +68,7 @@ mod test {
         assert!(page.is_ok());
         assert_eq!(
             page.unwrap(),
-            Page::TableLeaf(TableLeafPage {
+            Page {
                 header: PageHeader::TableLeafPageHeader {
                     first_freeblock: 0,
                     cell_count: 1,
@@ -83,8 +85,8 @@ mod test {
                         108, 49, 40, 111, 110, 101, 32, 116, 101, 120, 116, 44, 32, 116, 119, 111,
                         32, 105, 110, 116, 41
                     ]
-                }]
-            })
+                }.into()]
+            },
         )
     }
 

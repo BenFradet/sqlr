@@ -1,70 +1,8 @@
 use crate::utils;
 
+use super::page_type::PageType;
+
 pub const PAGE_MAX_SIZE: u32 = 65536;
-pub const HEADER_SIZE: usize = 100;
-
-// https://www.sqlite.org/fileformat.html
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Page {
-    TableLeaf(TableLeafPage),
-}
-
-impl Page {
-    pub fn parse(buffer: &[u8], page_num: usize) -> anyhow::Result<Page> {
-        let ptr_offset = if page_num == 1 { HEADER_SIZE as u16 } else { 0 };
-
-        match PageType::parse(buffer) {
-            Ok(PageType::TableLeaf) => {
-                TableLeafPage::parse(buffer, ptr_offset).map(Page::TableLeaf)
-            }
-            _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TableLeafPage {
-    pub header: PageHeader,
-    pub cell_pointers: Vec<u16>,
-    pub cells: Vec<TableLeafCell>,
-}
-
-impl TableLeafPage {
-    const PAGE_LEAF_HEADER_SIZE: usize = 8;
-    fn parse(buffer: &[u8], ptr_offset: u16) -> anyhow::Result<TableLeafPage> {
-        let header = PageHeader::parse(buffer)?;
-
-        let content_buffer = &buffer[Self::PAGE_LEAF_HEADER_SIZE..];
-        let cell_pointers =
-            Self::parse_cell_pointers(content_buffer, header.cell_count() as usize, ptr_offset);
-
-        let cells = cell_pointers
-            .iter()
-            .map(|&ptr| TableLeafCell::parse(&buffer[ptr as usize..]))
-            .collect::<anyhow::Result<Vec<TableLeafCell>>>()?;
-
-        Ok(TableLeafPage {
-            header,
-            cell_pointers,
-            cells,
-        })
-    }
-
-    // turns [u8] into [u16]
-    fn parse_cell_pointers(buffer: &[u8], n: usize, ptr_offset: u16) -> Vec<u16> {
-        let mut pointers = Vec::with_capacity(n);
-        for i in 0..n {
-            let offset = 2 * i;
-            if offset + 2 <= buffer.len() {
-                pointers.push(utils::read_be_word_at(buffer, offset) - ptr_offset);
-            } else {
-                break;
-            }
-        }
-        pointers
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PageHeader {
@@ -79,6 +17,7 @@ pub enum PageHeader {
         cell_count: u16,
         cell_content_offset: u32,
         fragmented_bytes_count: u8,
+        // points to the root of the subtree that contains keys > any keys in the page's cells
         rightmost_pointer: u32,
     },
 }
@@ -199,63 +138,6 @@ impl PageHeader {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum PageType {
-    TableLeaf,
-    TableInterior,
-}
-
-impl PageType {
-    const PAGE_LEAF_TABLE_ID: u8 = 13;
-    const PAGE_INTERIOR_TABLE_ID: u8 = 5;
-
-    // 2: interior index b-tree page
-    // 5: interior table b-tree page
-    // 10: leaf index b-tree page
-    // 13: leaf table b-tree page
-    fn parse(buffer: &[u8]) -> anyhow::Result<PageType> {
-        match buffer[0] {
-            Self::PAGE_LEAF_TABLE_ID => Ok(PageType::TableLeaf),
-            Self::PAGE_INTERIOR_TABLE_ID => Ok(PageType::TableInterior),
-            _ => Err(anyhow::anyhow!("unknown page type: {}", buffer[0])),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TableLeafCell {
-    pub size: i64,
-    pub row_id: i64,
-    pub payload: Vec<u8>,
-}
-
-impl TableLeafCell {
-    // format is:
-    // - size of the payload: varint
-    // - row id: varint
-    // - payload
-    fn parse(mut buffer: &[u8]) -> anyhow::Result<TableLeafCell> {
-        let (n, size) = utils::read_varint_at(buffer, 0);
-        buffer = &buffer[n as usize..];
-
-        let (n, row_id) = utils::read_varint_at(buffer, 0);
-        buffer = &buffer[n as usize..];
-
-        let su = size as usize;
-        let payload = if su <= buffer.len() {
-            buffer[..su].to_vec()
-        } else {
-            buffer.to_vec()
-        };
-
-        Ok(TableLeafCell {
-            size,
-            row_id,
-            payload,
-        })
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -287,78 +169,6 @@ mod test {
         assert_eq!(interior.rightmost_pointer(), Some(12));
         assert_eq!(leaf.byte_size(), 8);
         assert_eq!(interior.byte_size(), 12);
-    }
-
-    #[test]
-    fn parse_page_tests() -> () {
-        assert!(Page::parse(&[12], 0).is_err());
-        let buffer = [
-            // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
-            0, 10, // leaf cell (size, row id, payload)
-            10, 2, 127,
-        ];
-        let res = Page::parse(&buffer, 0);
-        assert!(res.is_ok());
-        let expected = Page::TableLeaf(TableLeafPage {
-            header: PageHeader::TableLeafPageHeader {
-                first_freeblock: 12,
-                cell_count: 1,
-                cell_content_offset: 65536,
-                fragmented_bytes_count: 0,
-            },
-            cell_pointers: vec![10],
-            cells: vec![TableLeafCell {
-                size: 10,
-                row_id: 2,
-                payload: vec![127],
-            }],
-        });
-        assert_eq!(expected, res.unwrap());
-    }
-
-    #[test]
-    fn parse_table_leaf_page_tests() -> () {
-        assert!(TableLeafPage::parse(&[12], 0).is_err());
-        let buffer = [
-            // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
-            0, 10, // leaf cell (size, row id, payload)
-            10, 2, 127,
-        ];
-        let res = TableLeafPage::parse(&buffer, 0);
-        assert!(res.is_ok());
-        let expected = TableLeafPage {
-            header: PageHeader::TableLeafPageHeader {
-                first_freeblock: 12,
-                cell_count: 1,
-                cell_content_offset: 65536,
-                fragmented_bytes_count: 0,
-            },
-            cell_pointers: vec![10],
-            cells: vec![TableLeafCell {
-                size: 10,
-                row_id: 2,
-                payload: vec![127],
-            }],
-        };
-        assert_eq!(expected, res.unwrap());
-    }
-
-    #[test]
-    fn parse_cell_pointers_test() -> () {
-        assert_eq!(
-            vec![65535],
-            TableLeafPage::parse_cell_pointers(&[255, 255], 1, 0)
-        );
-        assert_eq!(
-            vec![65535],
-            TableLeafPage::parse_cell_pointers(&[255, 255], 2, 0)
-        );
-        assert_eq!(
-            vec![65435],
-            TableLeafPage::parse_cell_pointers(&[255, 255], 1, HEADER_SIZE as u16)
-        );
     }
 
     #[test]
@@ -396,29 +206,5 @@ mod test {
             },
             PageHeader::parse(&[5, 0, 12, 0, 11, 0, 0, 0]).unwrap(),
         );
-    }
-
-    #[test]
-    fn parse_table_leaf_cell_tests() -> () {
-        let size = 10;
-        let row_id = 2;
-        let payload = 127;
-        let input = [size, row_id, payload];
-        let res = TableLeafCell::parse(&input);
-        let expected = TableLeafCell {
-            size: size as i64,
-            row_id: row_id as i64,
-            payload: vec![payload],
-        };
-        assert!(res.is_ok());
-        assert_eq!(expected, res.unwrap());
-    }
-
-    #[test]
-    fn parse_page_type_tests() -> () {
-        assert!(PageType::parse(&[12]).is_err());
-        let res = PageType::parse(&[13]);
-        assert!(res.is_ok());
-        assert_eq!(res.unwrap(), PageType::TableLeaf);
     }
 }

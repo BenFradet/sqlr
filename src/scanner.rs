@@ -1,7 +1,5 @@
 use crate::{
-    cursor::{Cursor, RecordHeader},
-    page::Page,
-    pager::Pager,
+    cell::Cell, cursor::{Cursor, RecordHeader}, pager::Pager
 };
 
 #[derive(Debug)]
@@ -26,22 +24,23 @@ impl<'p> Scanner<'p> {
             Err(e) => return Some(Err(e)),
         };
 
-        match page {
-            Page::TableLeaf(leaf) => {
-                let cell = leaf.cells.get(self.cell)?;
+        let cell = page.cells.get(self.cell)?;
 
-                let header = match RecordHeader::parse(&cell.payload) {
-                    Ok(header) => header,
-                    Err(e) => return Some(Err(e)),
-                };
+        let leaf = match cell {
+            Cell::TableLeaf(c) => c,
+            Cell::TableInterior(i) => return Some(Err(anyhow::anyhow!("not a leaf {:?}", i))),
+        };
 
-                let record = Cursor::new(header, self.pager, self.page, self.cell);
+        let header = match RecordHeader::parse(&leaf.payload) {
+            Ok(header) => header,
+            Err(e) => return Some(Err(e)),
+        };
 
-                self.cell += 1;
+        let record = Cursor::new(header, self.pager, self.page, self.cell);
 
-                Some(Ok(record))
-            }
-        }
+        self.cell += 1;
+
+        Some(Ok(record))
     }
 }
 
