@@ -71,29 +71,70 @@ mod test {
     use super::*;
 
     #[test]
-    fn parse_page_tests() -> () {
+    fn parse_interior_cells_tests() -> () {
+        let buffer = [
+            1, 0, 0, 0, 127, // interior cell 1
+            0, 0, 0, 1, 12, // interior cell 2
+        ];
+        let cell_pointers = [0, 5];
+        let parse_fn = TableInteriorCell::parse;
+        let res = Page::parse_cells(&buffer, &cell_pointers, parse_fn);
+        assert!(res.is_ok());
+        let expected: Vec<Cell> = vec![
+            TableInteriorCell { left_child_page: 16777216, key: 127 }.into(),
+            TableInteriorCell { left_child_page: 1, key: 12 }.into(),
+        ];
+        assert_eq!(expected, res.unwrap());
+    }
+
+    #[test]
+    fn parse_leaf_cells_tests() -> () {
+        let buffer = [
+            2, 1, 127, 128, // leaf cell 1
+            1, 2, 127, // leaf cell 2
+        ];
+        let cell_pointers = [0, 3];
+        let parse_fn = TableLeafCell::parse;
+        let res = Page::parse_cells(&buffer, &cell_pointers, parse_fn);
+        assert!(res.is_ok());
+        let expected: Vec<Cell> = vec![
+            TableLeafCell { size: 2, row_id: 1, payload: vec![127, 128] }.into(),
+            TableLeafCell { size: 1, row_id: 2, payload: vec![127] }.into(),
+        ];
+        assert_eq!(expected, res.unwrap());
+    }
+
+    #[test]
+    fn parse_table_interior_page_tests() -> () {
         assert!(Page::parse(&[12], 0).is_err());
         let buffer = [
-            // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
-            0, 10, // leaf cell (size, row id, payload)
-            10, 2, 127,
+            // page header w/ 2 as cell count
+            5, 0, 12, 0, 2, 0, 0, 0, 0, 0, 0, 21,
+            // cell pointer
+            0, 16, 0, 21,
+            // interior cell (left_child_page, key)
+            0, 0, 0, 1, 10, 
+            1, 0, 0, 0, 129, 0,
         ];
         let res = Page::parse(&buffer, 0);
         assert!(res.is_ok());
         let expected = Page {
-            header: PageHeader::TableLeafPageHeader {
+            header: PageHeader::TableInteriorPageHeader {
                 first_freeblock: 12,
-                cell_count: 1,
+                cell_count: 2,
                 cell_content_offset: 65536,
                 fragmented_bytes_count: 0,
+                rightmost_pointer: 21,
             },
-            cell_pointers: vec![10],
-            cells: vec![TableLeafCell {
-                size: 10,
-                row_id: 2,
-                payload: vec![127],
-            }.into()],
+            cell_pointers: vec![16, 21],
+            cells: vec![TableInteriorCell {
+                left_child_page: 1,
+                key: 10,
+            }.into(), TableInteriorCell {
+                left_child_page: 16777216,
+                key: 128,
+            }.into()
+            ],
         };
         assert_eq!(expected, res.unwrap());
     }
@@ -103,8 +144,10 @@ mod test {
         assert!(Page::parse(&[12], 0).is_err());
         let buffer = [
             // page header w/ 1 as cell count
-            13, 0, 12, 0, 1, 0, 0, 0, // cell pointer
-            0, 10, // leaf cell (size, row id, payload)
+            13, 0, 12, 0, 1, 0, 0, 0,
+            // cell pointer
+            0, 10, 
+            // leaf cell (size, row id, payload)
             10, 2, 127,
         ];
         let res = Page::parse(&buffer, 0);
