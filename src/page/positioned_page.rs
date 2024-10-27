@@ -32,6 +32,48 @@ mod test {
     use super::*;
 
     #[test]
+    fn next_page_pointer_tests() -> () {
+        let leaf_header = PageHeader::TableLeafPageHeader {
+            first_freeblock: 0,
+            cell_count: 2,
+            cell_content_offset: 0,
+            fragmented_bytes_count: 0,
+        };
+        let leaf_page = Page {
+            header: leaf_header,
+            cell_pointers: vec![],
+            cells: vec![],
+        };
+        let mut leaf_p_page = PositionedPage { page: leaf_page, cell_num: 0 };
+        assert_eq!(None, leaf_p_page.next_page_pointer());
+        assert_eq!(0, leaf_p_page.cell_num);
+
+        let rightmost_pointer = 12;
+        let c1: Cell = TableInteriorCell {
+            left_child_page: 1,
+            key: 12,
+        }.into();
+        let int_header = PageHeader::TableInteriorPageHeader {
+            first_freeblock: 0,
+            cell_count: 2,
+            cell_content_offset: 0,
+            fragmented_bytes_count: 0,
+            rightmost_pointer: rightmost_pointer,
+        };
+        let int_page = Page {
+            header: int_header,
+            cell_pointers: vec![],
+            cells: vec![c1],
+        };
+        let mut int_p_page = PositionedPage { page: int_page.clone(), cell_num: 1 };
+        assert_eq!(Some(rightmost_pointer), int_p_page.next_page_pointer());
+        assert_eq!(2, int_p_page.cell_num);
+        let mut int_p_page_2 = PositionedPage { page: int_page, cell_num: 0 };
+        assert_eq!(None, int_p_page_2.next_page_pointer());
+        assert_eq!(0, int_p_page_2.cell_num);
+    }
+
+    #[test]
     fn next_cell_leaf_tests() -> () {
         let c1: Cell = TableLeafCell {
             size: 2,
