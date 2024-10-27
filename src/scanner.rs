@@ -30,7 +30,7 @@ impl<'p> Scanner<'p> {
                     let new_page = self.pager.read_page(page_pointer as usize)?.clone();
                     self.page_stack.push(PositionedPage{
                         page: new_page,
-                        cell: 0,
+                        cell_num: 0,
                     });
                 },
                 Ok(None) if self.page_stack.len() > 1 => {
@@ -71,7 +71,7 @@ impl<'p> Scanner<'p> {
                 Err(e) => return Err(e),
             };
 
-            self.page_stack.push(PositionedPage { page, cell: 0 });
+            self.page_stack.push(PositionedPage { page, cell_num: 0 });
         }
         Ok(self.page_stack.last_mut())
     }
