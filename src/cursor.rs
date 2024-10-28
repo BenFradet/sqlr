@@ -22,7 +22,7 @@ impl Cursor {
 
 #[cfg(test)]
 mod test {
-    use crate::{db::DbHeader, page::{cell::Cell, page::HEADER_SIZE, pager::Pager}, record::record_header::RecordHeader};
+    use crate::{db::DbHeader, page::{cell::Cell, page::HEADER_SIZE, pager::{FilePager, Pager}}, record::record_header::RecordHeader};
 
     use super::*;
 
@@ -34,7 +34,7 @@ mod test {
         let mut header_buffer = [0; HEADER_SIZE];
         file.read_exact(&mut header_buffer).unwrap();
         let db_header = DbHeader::parse(&header_buffer).unwrap();
-        let mut pager = Pager::new(file, db_header.page_size as usize);
+        let mut pager = FilePager::new(file, db_header.page_size as usize);
         let page_nr = 1;
         let page = pager.read_page(page_nr).unwrap();
         let cell = page.cells.get(0).unwrap();

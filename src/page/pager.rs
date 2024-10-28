@@ -7,32 +7,29 @@ use anyhow::Context;
 
 use crate::page::page::Page;
 
+pub trait Pager {
+    fn read_page(&mut self, page_num: usize) -> anyhow::Result<&Page>;
+    fn load_page(&mut self, page_num: usize) -> anyhow::Result<Page>;
+}
+
 #[derive(Debug, Clone)]
-pub struct Pager<I: Read + Seek = std::fs::File> {
+pub struct FilePager<I: Read + Seek = std::fs::File> {
     input: I,
     pub page_size: usize,
     pub pages: HashMap<usize, Page>,
 }
 
-impl<I: Read + Seek> Pager<I> {
-    pub fn new(input: I, page_size: usize) -> Self {
-        Self {
-            input,
-            page_size,
-            pages: HashMap::new(),
+impl Pager for FilePager {
+    fn read_page(&mut self, page_num: usize) -> anyhow::Result<&Page> {
+        if let Entry::Vacant(_) = self.pages.entry(page_num) {
+            let page = self.load_page(page_num)?;
+            self.pages.insert(page_num, page);
         }
+        Ok(self.pages.get(&page_num).unwrap())
     }
 
-    pub fn read_page(&mut self, n: usize) -> anyhow::Result<&Page> {
-        if let Entry::Vacant(_) = self.pages.entry(n) {
-            let page = self.load_page(n)?;
-            self.pages.insert(n, page);
-        }
-        Ok(self.pages.get(&n).unwrap())
-    }
-
-    fn load_page(&mut self, n: usize) -> anyhow::Result<Page> {
-        let offset = n.saturating_sub(1) * self.page_size;
+    fn load_page(&mut self, page_num: usize) -> anyhow::Result<Page> {
+        let offset = page_num.saturating_sub(1) * self.page_size;
 
         self.input
             .seek(std::io::SeekFrom::Start(offset as u64))
@@ -41,7 +38,17 @@ impl<I: Read + Seek> Pager<I> {
         let mut buffer = vec![0; self.page_size];
         self.input.read_exact(&mut buffer).context("read page")?;
 
-        Page::parse(&buffer, n)
+        Page::parse(&buffer, page_num)
+    }
+}
+
+impl<I: Read + Seek> FilePager<I> {
+    pub fn new(input: I, page_size: usize) -> Self {
+        Self {
+            input,
+            page_size,
+            pages: HashMap::new(),
+        }
     }
 }
 
@@ -54,16 +61,16 @@ mod test {
     #[test]
     fn load_page_tests() -> () {
         let file = std::fs::File::open("test.db").unwrap();
-        let mut pager = Pager::new(file, 4096);
+        let mut pager = FilePager::new(file, 4096);
         assert!(pager.load_page(10).is_err());
         let file = std::fs::File::open("test.db").unwrap();
-        let mut pager = Pager::new(file, 8192);
+        let mut pager = FilePager::new(file, 8192);
         assert!(pager.load_page(0).is_err());
         let file = std::fs::File::open("test_wrong_page_type.db").unwrap();
-        let mut pager = Pager::new(file, 4096);
+        let mut pager = FilePager::new(file, 4096);
         assert!(pager.load_page(0).is_err());
         let file = std::fs::File::open("test.db").unwrap();
-        let mut pager = Pager::new(file, 4096);
+        let mut pager = FilePager::new(file, 4096);
         let page = pager.load_page(1);
         assert!(page.is_ok());
         assert_eq!(
@@ -93,15 +100,15 @@ mod test {
     #[test]
     fn read_page_tests() -> () {
         let file = std::fs::File::open("test.db").unwrap();
-        let mut pager = Pager::new(file, 4096);
+        let mut pager = FilePager::new(file, 4096);
         let pages = pager.pages.clone();
         assert_eq!(pages.len(), 0);
-        let res = pager.read_page(1);
+        let res = pager.read_page(2);
         assert!(res.is_ok());
         let page = res.unwrap().clone();
         let pages = pager.pages;
         assert_eq!(pages.len(), 1);
-        let page_opt = pages.get(&1).cloned();
+        let page_opt = pages.get(&2).cloned();
         assert_eq!(Some(page), page_opt);
     }
 }

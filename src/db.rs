@@ -2,7 +2,7 @@ use std::{io::Read, path::Path};
 
 use anyhow::Context;
 
-use crate::{page::{self, page_header, pager::Pager}, scanner::Scanner, utils};
+use crate::{page::{self, page_header, pager::FilePager}, scanner::Scanner, utils};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DbHeader {
@@ -36,7 +36,7 @@ impl DbHeader {
 #[derive(Debug)]
 pub struct Db {
     pub header: DbHeader,
-    pager: Pager,
+    pager: FilePager,
 }
 
 impl Db {
@@ -49,7 +49,7 @@ impl Db {
 
         let header = DbHeader::parse(&header_buffer).context("parse db header")?;
 
-        let pager = Pager::new(file, header.page_size as usize);
+        let pager = FilePager::new(file, header.page_size as usize);
 
         Ok(Db { header, pager })
     }
