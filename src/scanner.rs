@@ -57,6 +57,7 @@ impl<'p> Scanner<'p> {
         match cell {
             Cell::TableLeaf(leaf) => {
                 let header = RecordHeader::parse(&leaf.payload)?;
+                // TODO: remove clone
                 Ok(Some(ScannerElem::Cursor(Cursor::new(header, leaf.payload.clone()))))
             },
             Cell::TableInterior(interior) => Ok(Some(ScannerElem::PagePointer(interior.left_child_page))),
@@ -80,28 +81,99 @@ impl<'p> Scanner<'p> {
 mod test {
     use std::collections::{hash_map::Entry, HashMap};
 
-    use crate::page::{page::Page, page_header::PageHeader, pager::FilePager};
+    use crate::{page::{cell::{TableInteriorCell, TableLeafCell}, page::Page, page_header::PageHeader, pager::FilePager}, record::{record_field::RecordField, record_field_type::RecordFieldType}};
 
     use super::*;
 
     #[test]
     fn next_elem_tests() -> () {
-        let header = PageHeader::TableInteriorPageHeader {
+        // points to the rightmost pointer
+        let int_header = PageHeader::TableInteriorPageHeader {
             first_freeblock: 0,
             cell_count: 2,
             cell_content_offset: 0,
             fragmented_bytes_count: 0,
-            rightmost_pointer: 0,
+            rightmost_pointer: 12,
         };
-        let page = Page {
+        let empty_int_page = empty_page(int_header);
+        let mut pager = MockPager { reader: |_| Ok(empty_int_page.clone()), pages: HashMap::new() };
+        let mut scanner = Scanner::new(&mut pager, 0);
+        let next_elem = scanner.next_elem();
+        assert!(next_elem.is_ok());
+        match next_elem.unwrap() {
+            Some(ScannerElem::PagePointer(p)) => assert_eq!(12, p),
+            _ => panic!("not a page pointer")
+        }
+
+        // no next cell
+        let leaf_header = PageHeader::TableLeafPageHeader {
+            first_freeblock: 0,
+            cell_count: 2,
+            cell_content_offset: 0,
+            fragmented_bytes_count: 0,
+        };
+        let empty_leaf_page = empty_page(leaf_header);
+        let mut pager = MockPager { reader: |_| Ok(empty_leaf_page.clone()), pages: HashMap::new() };
+        let mut scanner = Scanner::new(&mut pager, 0);
+        let next_elem = scanner.next_elem();
+        assert!(next_elem.is_ok());
+        match next_elem.unwrap() {
+            None => (),
+            _ => panic!("not none")
+        }
+
+        // cell is leaf
+        let leaf_page = Page {
+            header: leaf_header,
+            cell_pointers: vec![0],
+            cells: vec![TableLeafCell {
+                size: 2,
+                row_id: 0,
+                payload: vec![2, 8],
+            }.into()],
+        };
+        let mut pager = MockPager { reader: |_| Ok(leaf_page.clone()), pages: HashMap::new() };
+        let mut scanner = Scanner::new(&mut pager, 0);
+        let next_elem = scanner.next_elem();
+        assert!(next_elem.is_ok());
+        match next_elem.unwrap() {
+            Some(ScannerElem::Cursor(Cursor { header, payload })) => {
+                assert_eq!(RecordHeader {
+                    fields: vec![RecordField {
+                        offset: 2,
+                        field_type: RecordFieldType::Zero
+                    }],
+                }, header);
+                assert_eq!(vec![2, 8], payload);
+            },
+            _ => panic!("not cursor")
+        }
+
+        // cell is int
+        let leaf_page = Page {
+            header: leaf_header,
+            cell_pointers: vec![0],
+            cells: vec![TableInteriorCell {
+                left_child_page: 38,
+                key: 0,
+            }.into()],
+        };
+        let mut pager = MockPager { reader: |_| Ok(leaf_page.clone()), pages: HashMap::new() };
+        let mut scanner = Scanner::new(&mut pager, 0);
+        let next_elem = scanner.next_elem();
+        assert!(next_elem.is_ok());
+        match next_elem.unwrap() {
+            Some(ScannerElem::PagePointer(p)) => assert_eq!(38, p),
+            _ => panic!("not cursor")
+        }
+    }
+
+    fn empty_page(header: PageHeader) -> Page {
+        Page {
             header: header,
             cell_pointers: vec![],
             cells: vec![],
-        };
-        let mut pager = MockPager { reader: |_| Ok(page.clone()), pages: HashMap::new() };
-        let mut scanner = Scanner::new(&mut pager, 0);
-        println!("{:?}", scanner.next_elem());
-        assert!(scanner.next_elem().is_ok());
+        }
     }
 
     struct MockPager<F> where F: Fn(usize) -> anyhow::Result<Page> {

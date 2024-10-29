@@ -53,7 +53,7 @@ mod test {
                 fields: vec![RecordField {
                     offset: 2,
                     field_type: RecordFieldType::Zero
-                }]
+                }],
             },
             RecordHeader::parse(&[2, 8]).unwrap()
         );
