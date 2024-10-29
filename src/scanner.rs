@@ -14,6 +14,7 @@ pub struct Scanner<'p> {
     pager: &'p mut dyn Pager,
     initial_page_num: usize,
     page_stack: Vec<PositionedPage>,
+    current_page_pointer: Option<u32>,
 }
 
 impl<'p> Scanner<'p> {
@@ -22,6 +23,7 @@ impl<'p> Scanner<'p> {
             pager,
             initial_page_num,
             page_stack: Vec::new(),
+            current_page_pointer: None,
         }
     }
 
@@ -30,11 +32,17 @@ impl<'p> Scanner<'p> {
             match self.next_elem() {
                 Ok(Some(ScannerElem::Cursor(cursor))) => return Ok(Some(cursor)),
                 Ok(Some(ScannerElem::PagePointer(page_pointer))) => {
+                    // TODO: remove clone
                     let new_page = self.pager.read_page(page_pointer as usize)?.clone();
                     self.page_stack.push(PositionedPage {
                         page: new_page,
                         cell_num: 0,
                     });
+                    if self.current_page_pointer == Some(page_pointer) {
+                        return Ok(None);
+                    } else {
+                        self.current_page_pointer = Some(page_pointer);
+                    }
                 }
                 Ok(None) if self.page_stack.len() > 1 => {
                     self.page_stack.pop();
