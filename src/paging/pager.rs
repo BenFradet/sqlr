@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 
-use crate::page::page::Page;
+use crate::paging::page::Page;
 
 pub trait Pager {
     fn read_page(&mut self, page_num: usize) -> anyhow::Result<&Page>;
@@ -54,7 +54,7 @@ impl<I: Read + Seek> FilePager<I> {
 
 #[cfg(test)]
 mod test {
-    use crate::page::{cell::TableLeafCell, page_header::PageHeader};
+    use crate::paging::{cell::TableLeafCell, page_header::PageHeader};
 
     use super::*;
 
@@ -92,7 +92,8 @@ mod test {
                         108, 49, 40, 111, 110, 101, 32, 116, 101, 120, 116, 44, 32, 116, 119, 111,
                         32, 105, 110, 116, 41
                     ]
-                }.into()]
+                }
+                .into()]
             },
         )
     }

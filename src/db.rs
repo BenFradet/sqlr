@@ -2,7 +2,11 @@ use std::{io::Read, path::Path};
 
 use anyhow::Context;
 
-use crate::{page::{self, page_header, pager::FilePager}, scanner::Scanner, utils};
+use crate::{
+    paging::{self, page_header, pager::FilePager},
+    scanner::Scanner,
+    utils,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct DbHeader {
@@ -43,7 +47,7 @@ impl Db {
     pub fn from_file(filename: impl AsRef<Path>) -> anyhow::Result<Db> {
         let mut file = std::fs::File::open(filename.as_ref()).context("open db file")?;
 
-        let mut header_buffer = [0; page::page::HEADER_SIZE];
+        let mut header_buffer = [0; paging::page::HEADER_SIZE];
         file.read_exact(&mut header_buffer)
             .context("read db header")?;
 

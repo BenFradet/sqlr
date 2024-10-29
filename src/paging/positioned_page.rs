@@ -8,26 +8,30 @@ pub struct PositionedPage {
 
 impl PositionedPage {
     pub fn next_cell(&mut self) -> Option<&Cell> {
-        self.page.cells.get(self.cell_num).inspect(|_| self.cell_num += 1)
+        self.page
+            .cells
+            .get(self.cell_num)
+            .inspect(|_| self.cell_num += 1)
     }
 
     pub fn next_page_pointer(&mut self) -> Option<u32> {
         match self.page.header {
-            PageHeader::TableInteriorPageHeader { .. } =>
+            PageHeader::TableInteriorPageHeader { .. } => {
                 if self.cell_num >= self.page.cells.len() {
                     self.cell_num = self.page.cells.len() + 1;
                     self.page.header.rightmost_pointer()
                 } else {
                     None
                 }
-            _ => None
+            }
+            _ => None,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::page::cell::{TableInteriorCell, TableLeafCell};
+    use crate::paging::cell::{TableInteriorCell, TableLeafCell};
 
     use super::*;
 
@@ -44,7 +48,10 @@ mod test {
             cell_pointers: vec![],
             cells: vec![],
         };
-        let mut leaf_p_page = PositionedPage { page: leaf_page, cell_num: 0 };
+        let mut leaf_p_page = PositionedPage {
+            page: leaf_page,
+            cell_num: 0,
+        };
         assert_eq!(None, leaf_p_page.next_page_pointer());
         assert_eq!(0, leaf_p_page.cell_num);
 
@@ -52,7 +59,8 @@ mod test {
         let c1: Cell = TableInteriorCell {
             left_child_page: 1,
             key: 12,
-        }.into();
+        }
+        .into();
         let int_header = PageHeader::TableInteriorPageHeader {
             first_freeblock: 0,
             cell_count: 2,
@@ -65,10 +73,16 @@ mod test {
             cell_pointers: vec![],
             cells: vec![c1],
         };
-        let mut int_p_page = PositionedPage { page: int_page.clone(), cell_num: 1 };
+        let mut int_p_page = PositionedPage {
+            page: int_page.clone(),
+            cell_num: 1,
+        };
         assert_eq!(Some(rightmost_pointer), int_p_page.next_page_pointer());
         assert_eq!(2, int_p_page.cell_num);
-        let mut int_p_page_2 = PositionedPage { page: int_page, cell_num: 0 };
+        let mut int_p_page_2 = PositionedPage {
+            page: int_page,
+            cell_num: 0,
+        };
         assert_eq!(None, int_p_page_2.next_page_pointer());
         assert_eq!(0, int_p_page_2.cell_num);
     }
@@ -79,12 +93,14 @@ mod test {
             size: 2,
             row_id: 12,
             payload: vec![127, 128],
-        }.into();
+        }
+        .into();
         let c2: Cell = TableLeafCell {
             size: 3,
             row_id: 13,
             payload: vec![127, 128, 129],
-        }.into();
+        }
+        .into();
         let page = Page {
             header: PageHeader::TableLeafPageHeader {
                 first_freeblock: 0,
@@ -95,7 +111,10 @@ mod test {
             cell_pointers: vec![1, 10, 12],
             cells: vec![c1.clone(), c2.clone()],
         };
-        let mut p_page = PositionedPage { page: page, cell_num: 0 };
+        let mut p_page = PositionedPage {
+            page: page,
+            cell_num: 0,
+        };
         let res1 = p_page.next_cell().cloned();
         let res2 = p_page.next_cell().cloned();
         let res3 = p_page.next_cell();
@@ -110,11 +129,13 @@ mod test {
         let c1: Cell = TableInteriorCell {
             left_child_page: 1,
             key: 12,
-        }.into();
+        }
+        .into();
         let c2: Cell = TableInteriorCell {
             left_child_page: 2,
             key: 13,
-        }.into();
+        }
+        .into();
         let page = Page {
             header: PageHeader::TableInteriorPageHeader {
                 first_freeblock: 0,
@@ -126,7 +147,10 @@ mod test {
             cell_pointers: vec![1, 10, 12],
             cells: vec![c1.clone(), c2.clone()],
         };
-        let mut p_page = PositionedPage { page: page, cell_num: 0 };
+        let mut p_page = PositionedPage {
+            page: page,
+            cell_num: 0,
+        };
         let res1 = p_page.next_cell().cloned();
         let res2 = p_page.next_cell().cloned();
         let res3 = p_page.next_cell();

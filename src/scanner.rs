@@ -1,4 +1,8 @@
-use crate::{cursor::Cursor, page::{cell::Cell, pager::Pager, positioned_page::PositionedPage}, record::record_header::RecordHeader};
+use crate::{
+    cursor::Cursor,
+    paging::{cell::Cell, pager::Pager, positioned_page::PositionedPage},
+    record::record_header::RecordHeader,
+};
 
 #[derive(Debug)]
 enum ScannerElem {
@@ -27,14 +31,14 @@ impl<'p> Scanner<'p> {
                 Ok(Some(ScannerElem::Cursor(cursor))) => return Ok(Some(cursor)),
                 Ok(Some(ScannerElem::PagePointer(page_pointer))) => {
                     let new_page = self.pager.read_page(page_pointer as usize)?.clone();
-                    self.page_stack.push(PositionedPage{
+                    self.page_stack.push(PositionedPage {
                         page: new_page,
                         cell_num: 0,
                     });
-                },
+                }
                 Ok(None) if self.page_stack.len() > 1 => {
                     self.page_stack.pop();
-                },
+                }
                 Ok(None) => return Ok(None),
                 Err(e) => return Err(e),
             }
@@ -58,9 +62,14 @@ impl<'p> Scanner<'p> {
             Cell::TableLeaf(leaf) => {
                 let header = RecordHeader::parse(&leaf.payload)?;
                 // TODO: remove clone
-                Ok(Some(ScannerElem::Cursor(Cursor::new(header, leaf.payload.clone()))))
-            },
-            Cell::TableInterior(interior) => Ok(Some(ScannerElem::PagePointer(interior.left_child_page))),
+                Ok(Some(ScannerElem::Cursor(Cursor::new(
+                    header,
+                    leaf.payload.clone(),
+                ))))
+            }
+            Cell::TableInterior(interior) => {
+                Ok(Some(ScannerElem::PagePointer(interior.left_child_page)))
+            }
         }
     }
 
@@ -81,7 +90,15 @@ impl<'p> Scanner<'p> {
 mod test {
     use std::collections::{hash_map::Entry, HashMap};
 
-    use crate::{page::{cell::{TableInteriorCell, TableLeafCell}, page::Page, page_header::PageHeader, pager::FilePager}, record::{record_field::RecordField, record_field_type::RecordFieldType}};
+    use crate::{
+        paging::{
+            cell::{TableInteriorCell, TableLeafCell},
+            page::Page,
+            page_header::PageHeader,
+            pager::FilePager,
+        },
+        record::{record_field::RecordField, record_field_type::RecordFieldType},
+    };
 
     use super::*;
 
@@ -96,13 +113,16 @@ mod test {
             rightmost_pointer: 12,
         };
         let empty_int_page = empty_page(int_header);
-        let mut pager = MockPager { reader: |_| Ok(empty_int_page.clone()), pages: HashMap::new() };
+        let mut pager = MockPager {
+            reader: |_| Ok(empty_int_page.clone()),
+            pages: HashMap::new(),
+        };
         let mut scanner = Scanner::new(&mut pager, 0);
         let next_elem = scanner.next_elem();
         assert!(next_elem.is_ok());
         match next_elem.unwrap() {
             Some(ScannerElem::PagePointer(p)) => assert_eq!(12, p),
-            _ => panic!("not a page pointer")
+            _ => panic!("not a page pointer"),
         }
 
         // no next cell
@@ -113,13 +133,16 @@ mod test {
             fragmented_bytes_count: 0,
         };
         let empty_leaf_page = empty_page(leaf_header);
-        let mut pager = MockPager { reader: |_| Ok(empty_leaf_page.clone()), pages: HashMap::new() };
+        let mut pager = MockPager {
+            reader: |_| Ok(empty_leaf_page.clone()),
+            pages: HashMap::new(),
+        };
         let mut scanner = Scanner::new(&mut pager, 0);
         let next_elem = scanner.next_elem();
         assert!(next_elem.is_ok());
         match next_elem.unwrap() {
             None => (),
-            _ => panic!("not none")
+            _ => panic!("not none"),
         }
 
         // cell is leaf
@@ -130,23 +153,30 @@ mod test {
                 size: 2,
                 row_id: 0,
                 payload: vec![2, 8],
-            }.into()],
+            }
+            .into()],
         };
-        let mut pager = MockPager { reader: |_| Ok(leaf_page.clone()), pages: HashMap::new() };
+        let mut pager = MockPager {
+            reader: |_| Ok(leaf_page.clone()),
+            pages: HashMap::new(),
+        };
         let mut scanner = Scanner::new(&mut pager, 0);
         let next_elem = scanner.next_elem();
         assert!(next_elem.is_ok());
         match next_elem.unwrap() {
             Some(ScannerElem::Cursor(Cursor { header, payload })) => {
-                assert_eq!(RecordHeader {
-                    fields: vec![RecordField {
-                        offset: 2,
-                        field_type: RecordFieldType::Zero
-                    }],
-                }, header);
+                assert_eq!(
+                    RecordHeader {
+                        fields: vec![RecordField {
+                            offset: 2,
+                            field_type: RecordFieldType::Zero
+                        }],
+                    },
+                    header
+                );
                 assert_eq!(vec![2, 8], payload);
-            },
-            _ => panic!("not cursor")
+            }
+            _ => panic!("not cursor"),
         }
 
         // cell is int
@@ -156,15 +186,19 @@ mod test {
             cells: vec![TableInteriorCell {
                 left_child_page: 38,
                 key: 0,
-            }.into()],
+            }
+            .into()],
         };
-        let mut pager = MockPager { reader: |_| Ok(leaf_page.clone()), pages: HashMap::new() };
+        let mut pager = MockPager {
+            reader: |_| Ok(leaf_page.clone()),
+            pages: HashMap::new(),
+        };
         let mut scanner = Scanner::new(&mut pager, 0);
         let next_elem = scanner.next_elem();
         assert!(next_elem.is_ok());
         match next_elem.unwrap() {
             Some(ScannerElem::PagePointer(p)) => assert_eq!(38, p),
-            _ => panic!("not cursor")
+            _ => panic!("not cursor"),
         }
     }
 
@@ -176,12 +210,18 @@ mod test {
         }
     }
 
-    struct MockPager<F> where F: Fn(usize) -> anyhow::Result<Page> {
+    struct MockPager<F>
+    where
+        F: Fn(usize) -> anyhow::Result<Page>,
+    {
         reader: F,
         pages: HashMap<usize, Page>,
     }
 
-    impl<F> Pager for MockPager<F> where F: Fn(usize) -> anyhow::Result<Page> {
+    impl<F> Pager for MockPager<F>
+    where
+        F: Fn(usize) -> anyhow::Result<Page>,
+    {
         fn load_page(&mut self, page_num: usize) -> anyhow::Result<Page> {
             (self.reader)(page_num)
         }
@@ -206,18 +246,21 @@ mod test {
         let mut scanner2 = Scanner::new(&mut pager, 0);
         let current_page = scanner2.current_page();
         assert!(current_page.is_ok());
-        assert_eq!(Some(PositionedPage {
-            page: Page {
-                header: crate::page::page_header::PageHeader::TableLeafPageHeader {
-                    first_freeblock: 0,
-                    cell_count: 0,
-                    cell_content_offset: 0,
-                    fragmented_bytes_count: 0
+        assert_eq!(
+            Some(PositionedPage {
+                page: Page {
+                    header: crate::paging::page_header::PageHeader::TableLeafPageHeader {
+                        first_freeblock: 0,
+                        cell_count: 0,
+                        cell_content_offset: 0,
+                        fragmented_bytes_count: 0
+                    },
+                    cell_pointers: vec![],
+                    cells: vec![],
                 },
-                cell_pointers: vec![],
-                cells: vec![],
-            },
-            cell_num: 0,
-        }), current_page.unwrap().cloned());
+                cell_num: 0,
+            }),
+            current_page.unwrap().cloned()
+        );
     }
 }

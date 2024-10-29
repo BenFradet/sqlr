@@ -5,7 +5,7 @@ use db::Db;
 
 mod cursor;
 mod db;
-mod page;
+mod paging;
 mod record;
 mod scanner;
 mod utils;

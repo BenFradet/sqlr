@@ -63,7 +63,8 @@ impl PageHeader {
                 rightmost_pointer: utils::read_be_double_word_at(
                     buffer,
                     Self::PAGE_RIGHTMOST_POINTER_OFFSET,
-                ).1,
+                )
+                .1,
             }
         } else {
             PageHeader::TableLeafPageHeader {
@@ -77,47 +78,10 @@ impl PageHeader {
         Ok(header)
     }
 
-    pub fn first_freeblock(&self) -> u16 {
-        match *self {
-            PageHeader::TableInteriorPageHeader {
-                first_freeblock, ..
-            }
-            | PageHeader::TableLeafPageHeader {
-                first_freeblock, ..
-            } => first_freeblock,
-        }
-    }
-
     pub fn cell_count(&self) -> u16 {
         match *self {
             PageHeader::TableInteriorPageHeader { cell_count, .. }
             | PageHeader::TableLeafPageHeader { cell_count, .. } => cell_count,
-        }
-    }
-
-    pub fn cell_content_offset(&self) -> u32 {
-        match *self {
-            PageHeader::TableInteriorPageHeader {
-                cell_content_offset,
-                ..
-            }
-            | PageHeader::TableLeafPageHeader {
-                cell_content_offset,
-                ..
-            } => cell_content_offset,
-        }
-    }
-
-    pub fn fragmented_bytes_count(&self) -> u8 {
-        match *self {
-            PageHeader::TableInteriorPageHeader {
-                fragmented_bytes_count,
-                ..
-            }
-            | PageHeader::TableLeafPageHeader {
-                fragmented_bytes_count,
-                ..
-            } => fragmented_bytes_count,
         }
     }
 
@@ -157,14 +121,8 @@ mod test {
             fragmented_bytes_count: 0,
             rightmost_pointer: 12,
         };
-        assert_eq!(leaf.cell_content_offset(), 65536);
-        assert_eq!(interior.cell_content_offset(), 65536);
         assert_eq!(leaf.cell_count(), 1);
         assert_eq!(interior.cell_count(), 1);
-        assert_eq!(leaf.first_freeblock(), 12);
-        assert_eq!(interior.first_freeblock(), 12);
-        assert_eq!(leaf.fragmented_bytes_count(), 0);
-        assert_eq!(interior.fragmented_bytes_count(), 0);
         assert_eq!(leaf.rightmost_pointer(), None);
         assert_eq!(interior.rightmost_pointer(), Some(12));
         assert_eq!(leaf.byte_size(), 8);

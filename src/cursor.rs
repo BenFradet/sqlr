@@ -3,26 +3,33 @@ use crate::{record::record_header::RecordHeader, value::Value};
 #[derive(Debug)]
 pub struct Cursor {
     pub header: RecordHeader,
-    pub payload: Vec<u8>
+    pub payload: Vec<u8>,
 }
 
 impl Cursor {
-    pub fn new(
-        header: RecordHeader,
-        payload: Vec<u8>,
-    ) -> Self {
+    pub fn new(header: RecordHeader, payload: Vec<u8>) -> Self {
         Self { header, payload }
     }
 
     pub fn field(&self, n: usize) -> Option<Value> {
         let record_field = self.header.fields.get(n)?;
-        record_field.field_type.value(&self.payload, record_field.offset)
+        record_field
+            .field_type
+            .value(&self.payload, record_field.offset)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{db::DbHeader, page::{cell::Cell, page::HEADER_SIZE, pager::{FilePager, Pager}}, record::record_header::RecordHeader};
+    use crate::{
+        db::DbHeader,
+        paging::{
+            cell::Cell,
+            page::HEADER_SIZE,
+            pager::{FilePager, Pager},
+        },
+        record::record_header::RecordHeader,
+    };
 
     use super::*;
 

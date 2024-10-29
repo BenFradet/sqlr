@@ -31,12 +31,13 @@ impl TableInteriorCell {
     pub fn parse(mut buffer: &[u8]) -> anyhow::Result<Cell> {
         let (n, left_child_page) = utils::read_be_double_word_at(buffer, 0);
         buffer = &buffer[n as usize..];
-        
+
         let (_, key) = utils::read_varint_at(buffer, 0);
         Ok(TableInteriorCell {
             left_child_page,
             key,
-        }.into())
+        }
+        .into())
     }
 }
 
@@ -70,7 +71,8 @@ impl TableLeafCell {
             size,
             row_id,
             payload,
-        }.into())
+        }
+        .into())
     }
 }
 
